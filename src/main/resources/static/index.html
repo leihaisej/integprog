@@ -1,0 +1,176 @@
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>OASIS - Student Information System</title>
+        <link rel="stylesheet" href="style.css">
+        <link rel="icon" type="image/png" href="oasis.png">
+    </head>
+    <body>
+        <div class="login-page-wrapper">
+            <div class="login-form-container">
+                <img src="oasis.png" alt="OASIS Logo" class="logo">
+                <h2 class="welcome-text">Welcome OACEANS!</h2>
+                <p style="text-align: center; margin-bottom: 25px; color: #555;">Sign in to start your session</p>
+
+                <form id="loginForm">
+                    <div class="input-group">
+                        <label for="userId">USER ID (Student No. / Admin ID)</label>
+                        <input type="text" id="userId" name="userId" required autocomplete="username">
+                    </div>                    <div class="input-group">
+                        <label for="password">PASSWORD</label>
+                        <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                            <input type="password" id="password" name="password" required autocomplete="current-password">
+                            <button type="button" class="btn btn-secondary" id="toggleLoginPassword" style="padding: 5px 10px;">
+                                <i>Show</i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin: 10px 0;">
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" id="rememberMe" name="rememberMe">
+                            <span>Remember me</span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-login">SIGN IN</button>
+                </form>
+                <div class="links">
+                    <a href="#" id="openRegistrationModal">Create Student Account</a>
+                </div>
+            </div>
+            <div class="login-branding-container">
+                <img src="oasis.png" alt="OASIS Logo" class="logo">
+                <h1>Opehlia Art Academy</h1>
+            </div>
+        </div>
+
+        <!-- Student Registration Modal -->
+        <div id="registrationModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create Student Account Application</h3>
+                    <button class="close-button" id="closeRegistrationModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <form id="registrationForm">
+                        <div class="form-group">
+                            <label for="regName">Full Name (SURNAME, First Name M.I.):</label>
+                            <input type="text" id="regName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regPassword">Password:</label>
+                            <input type="password" id="regPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regConfirmPassword">Confirm Password:</label>
+                            <input type="password" id="regConfirmPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="regCourse">Preferred Course (Undergraduate):</label>
+                            <select id="regCourse" required>
+                                <!-- Options will be populated by JS -->
+                            </select>
+                        </div>
+                        <button type="submit" class="btn" style="width:100%;">Submit Application</button>
+                        <div id="registrationSuccessMsg" style="margin-top:10px;color:green;display:none;"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registration Success Modal -->
+        <div id="registrationSuccessModal" class="modal">
+            <div class="modal-content" style="max-width: 400px; text-align: center;">
+                <div class="modal-header" style="justify-content: center; border-bottom: none;">
+                    <h3 style="font-size: 1.6em; color: var(--success-color);">Registration Successful!</h3>
+                </div>
+                <div class="modal-body" style="padding-top: 0;">
+                    <p style="font-size: 1.1em; margin-bottom: 10px;">Your Student ID is:</p>
+                    <div id="regStudentIdDisplay" style="font-size: 1.5em; font-weight: bold; color: green; margin-bottom: 15px;"></div>
+                    <button id="copyStudentIdBtn" class="btn btn-sm btn-primary" style="margin-bottom: 10px;">Copy Student ID</button>
+                    <p style="color: #555; font-size: 0.95em;">Please save your Student ID for future logins.</p>
+                </div>
+                <div class="modal-footer" style="justify-content: center; border-top: 1px solid var(--border-color); padding-top:15px;">
+                    <button type="button" class="btn btn-success" id="closeRegistrationSuccessModal" style="padding: 8px 25px; font-size:1.1em;">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <script src="auth.js"></script>
+        <script>
+            // Check role parameter and hide create student account link for admins
+            function checkUserRole() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const role = urlParams.get('role');
+                
+                if (role === 'admin') {
+                    const createAccountLink = document.getElementById('openRegistrationModal');
+                    if (createAccountLink) {
+                        createAccountLink.style.display = 'none';
+                    }
+                }
+            }
+
+            // Call the function when page loads
+            document.addEventListener('DOMContentLoaded', checkUserRole);
+
+            const registrationModal = document.getElementById('registrationModal');
+            const openRegModalBtn = document.getElementById('openRegistrationModal');
+            const closeRegModalBtn = document.getElementById('closeRegistrationModal');
+
+            function populateCourseDropdownReg() {
+                fetch('/api/auth/courses')
+                    .then(response => response.ok ? response.json() : [])
+                    .then(courses => {
+                        const select = document.getElementById('regCourse');
+                        select.innerHTML = '<option value="">-- Select Preferred Undergraduate Course --</option>';
+                        if (!Array.isArray(courses) || courses.length === 0) {
+                            console.warn("No courses found from backend to populate dropdown.");
+                            return;
+                        }
+                        courses.forEach(course => {
+                            const nameLower = course.name.toLowerCase();
+                            // Filter for undergraduate programs
+                            if (!nameLower.includes('master') &&
+                                !nameLower.includes('doctorate') &&
+                                !nameLower.includes('ph.d') &&
+                                !nameLower.includes('phd') &&
+                                !nameLower.includes('m.a.') &&
+                                !nameLower.includes('m.s.') &&
+                                !nameLower.includes('d.b.a') &&
+                                !nameLower.includes('ll.m') &&
+                                !nameLower.includes('diploma') &&
+                                !nameLower.includes('certificate')
+                                ) {
+                                const option = document.createElement('option');
+                                option.value = course.code;
+                                option.textContent = `${course.name} (${course.code})`;
+                                select.appendChild(option);
+                            }
+                        });
+                    });
+            }
+
+
+            if (openRegModalBtn) {
+                openRegModalBtn.onclick = function(e) {
+                    e.preventDefault();
+                    populateCourseDropdownReg();
+                    if (registrationModal) registrationModal.style.display = 'block';
+                }
+            }
+            if (closeRegModalBtn) {
+                closeRegModalBtn.onclick = function() {
+                    if (registrationModal) registrationModal.style.display = 'none';
+                }
+            }
+
+            window.onclick = function(event) {
+                if (event.target == registrationModal) {
+                    if (registrationModal) registrationModal.style.display = 'none';
+                }
+            }
+        </script>
+    </body>
+    </html>

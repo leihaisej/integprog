@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OASIS - Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="oasis.png">
+    <style>
+    .schedule-table-styled {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+        font-size: 1em;
+        background: #fff;
+        box-shadow: 0 2px 8px #e3e3e3;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .schedule-table-styled th, .schedule-table-styled td {
+        border: 1px solid #bdbdbd;
+        padding: 10px 12px;
+        text-align: left;
+    }
+    .schedule-table-styled th {
+        background: #e91e63;
+        color: #fff;
+        font-weight: 600;
+        letter-spacing: 1px;
+    }
+    .schedule-table-styled tr:nth-child(even) {
+        background: #fce4ec;
+    }
+    .schedule-table-styled tr:hover {
+        background: #f8bbd0;
+        transition: background 0.2s;
+    }
+    .schedule-table-styled td {
+        vertical-align: middle;
+    }
+    .schedule-table-styled td:last-child {
+        min-width: 140px;
+    }
+    .btn-edit, .btn-danger {
+        display: inline-block;
+        margin: 2px 6px 2px 0;
+        padding: 8px 18px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 500;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.2s, box-shadow 0.2s;
+        box-shadow: 0 2px 8px #f8bbd0;
+    }
+    .btn-edit {
+        background: #e91e63;
+    }
+    .btn-edit:hover {
+        background: #d81b60;
+    }
+    .btn-danger {
+        background: #f06292;
+    }
+    .btn-danger:hover {
+        background: #c2185b;
+    }
+    </style>
+</head>
+<body>
+    <header class="dashboard-header">
+        <img src="oasis.png" alt="OASIS Logo" class="logo">
+        <h1>OASIS Admin Dashboard</h1>
+        <div class="user-info">
+            <span id="adminNameHeader">Admin</span>
+            <button id="logoutButton" class="btn btn-sm btn-logout">Logout</button>
+        </div>
+    </header>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <nav>
+                <ul>
+                    <li><a href="#dashboardHome" class="nav-link active" data-target="dashboardHome">Dashboard</a></li>
+                    <li><a href="#manageStudents" class="nav-link" data-target="manageStudents">Manage Students</a></li>
+                    <li><a href="#enrollmentRequests" class="nav-link" data-target="enrollmentRequests">Enrollment Requests <span id="pendingRequestsCount" class="badge" style="display:none;"></span></a></li>
+                    <li><a href="#manageFaculty" class="nav-link" data-target="manageFaculty">Manage Faculty</a></li>
+                    <li><a href="#manageCourses" class="nav-link" data-target="manageCourses">Manage Courses</a></li>
+                    <li><a href="#manageSubjects" class="nav-link" data-target="manageSubjects">Manage Subjects</a></li>
+                    <li><a href="#manageSections" class="nav-link" data-target="manageSections">Manage Sections</a></li>
+                    <li><a href="#manageSchedules" class="nav-link" data-target="manageSchedules">Manage Schedules</a></li>
+                    <li><a href="#encodeGrades" class="nav-link" data-target="encodeGrades">Encode Grades</a></li>
+                    <li><a href="#manageAccounts" class="nav-link" data-target="manageAccounts">Accounts</a></li>
+                    <li><a href="#manageCurriculum" class="nav-link" data-target="manageCurriculum">Manage Curriculum</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="main-content">
+            <!-- Admin Dashboard Home Section -->
+            <section id="dashboardHome" class="content-section active">
+                <h2>Admin Dashboard Overview</h2>
+                <p>Welcome OACEANS! Administration Panel. Select an option from the sidebar to manage system data.</p>
+                <div class="oaa-card">
+                    <div class="oaa-card-header">Quick Stats</div>
+                    <p>Total Students: <span id="statTotalStudents">0</span></p>
+                    <p>Pending Enrollment Requests: <span id="statPendingRequests">0</span></p>
+                    <p>Total Courses Offered: <span id="statTotalCourses">0</span></p>
+                </div>
+            </section>
+
+            <!-- Manage Students Section -->
+            <section id="manageStudents" class="content-section">
+                <h2>Manage Students</h2>
+                <button id="openAddStudentModal" class="btn btn-success">Add New Student</button>
+                <table id="studentsTable">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Course</th>
+                            <th>Section</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+
+            <!-- Enrollment Requests Section -->
+            <section id="enrollmentRequests" class="content-section">
+                <h2>Pending Enrollment Requests</h2>
+                <table id="enrollmentRequestsTable">
+                    <thead>
+                        <tr>
+                            <th>Request ID</th>
+                            <th>Student Name</th>
+                            <th>Student ID</th>
+                            <th>Preferred Course</th>
+                            <th>Term Applied For</th>
+                            <th>Date Applied</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+
+            <!-- Manage Faculty Section -->
+            <section id="manageFaculty" class="content-section">
+                <h2>Manage Faculty</h2>
+                <button id="openAddFacultyModal" class="btn btn-success">Add New Faculty</button>
+                <table id="facultyTable">
+                    <thead><tr><th>Faculty ID</th><th>Name</th><th>Department</th><th>Position</th><th>Email</th><th>Contact</th><th>Assigned Subjects</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- Manage Courses Section -->
+            <section id="manageCourses" class="content-section">
+                <h2>Manage Courses</h2>
+                <button id="openAddCourseModal" class="btn btn-success">Add New Course</button>
+                <table id="coursesTable">
+                     <thead><tr><th>Code</th><th>Name</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- Manage Subjects Section -->
+            <section id="manageSubjects" class="content-section">
+                <h2>Manage Subjects</h2>
+                <button id="openAddSubjectModal" class="btn btn-success">Add New Subject</button>
+                <table id="subjectsTable">
+                    <thead><tr><th>Code</th><th>Name</th><th>Units</th><th>Course Code</th><th>Description</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- Manage Sections Section -->
+            <section id="manageSections" class="content-section">
+                <h2>Manage Sections</h2>
+                 <button id="openAddSectionModal" class="btn btn-success">Add New Section</button>
+                 <!-- Future: Add button to "Manage Section Schedules" which opens a new, more complex modal/view -->
+                <table id="sectionsTable">
+                    <thead><tr><th>ID</th><th>Name</th><th>Course Code</th><th>Year Level</th><th>Section Letter</th><th>Enrollment</th><th>Actions</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- Manage Schedules Section -->
+            <section id="manageSchedules" class="content-section">
+                <h2>Manage Student Schedules</h2>
+                <div class="schedule-controls" style="margin-bottom: 20px;">
+                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                        <label for="scheduleStudentSelect">Select Student:</label>
+                        <select id="scheduleStudentSelect" style="width: 200px;"></select>
+                    </div>
+                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                        <label for="scheduleAcademicYear">Academic Year:</label>
+                        <select id="scheduleAcademicYear" style="width: 120px;">
+                            <option value="">All Years</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
+                        <label for="scheduleSemester">Semester:</label>
+                        <select id="scheduleSemester" style="width: 120px;">
+                            <option value="">All Semesters</option>
+                        </select>
+                    </div>
+                    <button id="openAddScheduleModal" class="btn btn-success">Add Schedule Item</button>
+                </div>
+                <table id="schedulesTable" class="schedule-table-styled">
+                    <thead>
+                        <tr>
+                            <th>Subject Code</th>
+                            <th>Description</th>
+                            <th>Units</th>
+                            <th>Lec</th>
+                            <th>Lab</th>
+                            <th>Day & Time</th>
+                            <th>Room</th>
+                            <th>Faculty</th>
+                            <th>Academic Year</th>
+                            <th>Semester</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
+            <!-- Encode Grades Section -->
+            <section id="encodeGrades" class="content-section">
+                <h2>Encode Grades</h2>
+                <div class="alert alert-info" style="margin-bottom: 20px; padding: 10px; background-color: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
+                    <strong>Note:</strong> You can encode grades for any subject, regardless of the student's enrollment status. 
+                    This allows for grade corrections and late submissions.
+                </div>
+                <form id="encodeGradesForm">
+                    <div class="form-group">
+                        <label for="gradeStudentSelect">Select Student:</label>
+                        <select id="gradeStudentSelect" required></select>
+                    </div>
+                     <div class="form-group">
+                        <label for="gradeTermSelect">Select Term (SY - Semester):</label>
+                        <select id="gradeTermSelect" required>
+                            <option value="">-- Select Term --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="gradeSubjectSelectEncode">Select Subject (from student's schedule for selected term):</label>
+                        <select id="gradeSubjectSelectEncode" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="finalGradeInput">Final Grade (Numeric, e.g., 1.00-5.00 or 0-100):</label>
+                        <input type="number" id="finalGradeInput" step="0.01" placeholder="Enter numeric grade">
+                    </div>
+                     <div class="form-group">
+                        <label for="gradeRemarksSelect">Remarks:</label>
+                        <select id="gradeRemarksSelect">
+                            <option value="In Progress">In Progress</option>
+                            <option value="Passed">Passed</option>
+                            <option value="Failed">Failed</option>
+                            <option value="Incomplete">Incomplete (INC)</option>
+                            <option value="Officially Dropped">Officially Dropped (OD)</option>
+                            <option value="Unofficially Dropped">Unofficially Dropped (UD)</option>
+                            <option value="No Grade Yet">No Grade Yet (NGY)</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Grade</button>
+                </form>
+                 <div id="studentGradesDisplay" class="mt-3">
+                    <h4>Current Grades for Selected Term:</h4>
+                    <div id="termGPADisplay" style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                        <strong>Term GPA: N/A</strong>
+                    </div>
+                    <table id="currentGradesTable">
+                        <thead><tr><th>Subject Code</th><th>Subject Name</th><th>Units</th><th>Grade</th><th>Numeric Grade</th><th>GPA</th><th>Actions</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Manage Accounts Section -->
+            <section id="manageAccounts" class="content-section">
+                <h2>Manage Student Accounts</h2>
+                <div class="search-container">
+                    <input type="text" id="accountSearchInput" placeholder="Search by student name or ID..." class="search-input">
+                </div>
+                <table id="accountsTable">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Student Name</th>
+                            <th>Total Balance</th>
+                            <th>Remaining Balance</th>
+                            <th>Academic Year</th>
+                            <th>Semester</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+
+            <!-- Curriculum Management Section -->
+            <section id="manageCurriculum" class="content-section">
+                <h2>Manage Curriculum</h2>
+                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 16px;">
+                    <label for="curriculumCourseFilter" style="font-weight: 500;">Filter by Course:</label>
+                    <select id="curriculumCourseFilter" style="min-width: 200px;"></select>
+                    <button id="openAddCurriculumModal" class="btn btn-success">Add Curriculum</button>
+                </div>
+                <table id="curriculumTable">
+                    <thead>
+                        <tr>
+                            <th>Course</th>
+                            <th>Year Level</th>
+                            <th>Semester</th>
+                            <th>Subjects</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <!-- Student Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="studentModalTitle">Add Student</h3>
+                <button class="close-button" id="closeStudentModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="studentForm">
+                    <input type="hidden" id="studentEditId">
+                    <div class="form-group">
+                        <label for="studentIdModal">Student ID:</label>
+                        <input type="text" id="studentIdModal" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentNameModal">Name:</label>
+                        <input type="text" id="studentNameModal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentCourseModal">Course:</label>
+                        <select id="studentCourseModal" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentPasswordModal">Password (leave blank if not changing):</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="password" id="studentPasswordModal">
+                            <button type="button" class="btn btn-sm btn-secondary" id="toggleStudentPassword">
+                                <i>Show</i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentSectionModal">Section:</label>
+                        <select id="studentSectionModal"></select> <!-- Populated from sections -->
+                    </div>
+                    <div class="form-group">
+                        <label for="studentStatusModal">System Status:</label>
+                        <select id="studentStatusModal">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentAdmissionStatusModal">Admission Status:</label>
+                         <select id="studentAdmissionStatusModal">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentScholasticStatusModal">Scholastic Status:</label>
+                        <select id="studentScholasticStatusModal">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelStudentForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="studentForm">Save Student</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Modal -->
+    <div id="courseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="courseModalTitle">Add Course</h3>
+                <button class="close-button" id="closeCourseModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="courseForm">
+                    <input type="hidden" id="courseEditCode">
+                    <div class="form-group">
+                        <label for="courseCodeModal">Course Code (e.g., BSIT):</label>
+                        <input type="text" id="courseCodeModal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="courseNameModal">Course Name (e.g., Bachelor of Science in Information Technology):</label>
+                        <input type="text" id="courseNameModal" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" id="cancelCourseForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="courseForm">Save Course</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Faculty Modal -->
+    <div id="facultyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="facultyModalTitle">Add Faculty</h3>
+                <button class="close-button" id="closeFacultyModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="facultyForm">
+                    <input type="hidden" id="facultyEditId">
+                    <div class="form-group">
+                        <label for="facultyIdModal">Faculty ID:</label>
+                        <input type="text" id="facultyIdModal" readonly placeholder="Will be auto-generated">
+                    </div>
+                    <div class="form-group">
+                        <label for="facultyNameModal">Faculty Name:</label>
+                        <input type="text" id="facultyNameModal" placeholder="e.g., Dr. John Smith" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="facultyDepartmentModal">Department:</label>
+                        <select id="facultyDepartmentModal" required>
+                            <option value="">-- Select Department --</option>
+                            <option value="Fine Arts">Fine Arts</option>
+                            <option value="Visual Arts">Visual Arts</option>
+                            <option value="Digital Arts">Digital Arts</option>
+                            <option value="Graphic Design">Graphic Design</option>
+                            <option value="Animation">Animation</option>
+                            <option value="Photography">Photography</option>
+                            <option value="Sculpture">Sculpture</option>
+                            <option value="Painting">Painting</option>
+                            <option value="Drawing">Drawing</option>
+                            <option value="Art History">Art History</option>
+                            <option value="Art Education">Art Education</option>
+                            <option value="English">English</option>
+                            <option value="Filipino">Filipino</option>
+                            <option value="Social Sciences">Social Sciences</option>
+                            <option value="Physical Education">Physical Education</option>
+                            <option value="Mathematics">Mathematics</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="facultyPositionModal">Position:</label>
+                        <select id="facultyPositionModal" required>
+                            <option value="">-- Select Position --</option>
+                            <option value="Professor">Professor</option>
+                            <option value="Associate Professor">Associate Professor</option>
+                            <option value="Assistant Professor">Assistant Professor</option>
+                            <option value="Instructor">Instructor</option>
+                            <option value="Lecturer">Lecturer</option>
+                            <option value="Part-time Instructor">Part-time Instructor</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="facultyEmailModal">Email:</label>
+                        <input type="email" id="facultyEmailModal" placeholder="e.g., john.smith@university.edu" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="facultyContactModal">Contact Number:</label>
+                        <input type="tel" id="facultyContactModal" placeholder="e.g., +63 912 345 6789">
+                    </div>
+                    <div class="form-group">
+                        <label for="facultySubjectsModal">Assigned Subjects:</label>
+                        <select id="facultySubjectsModal" multiple size="6" style="width: 100%;">
+                            <option value="">-- Loading subjects... --</option>
+                        </select>
+                        <small style="color: #666;">Hold Ctrl (or Cmd on Mac) to select multiple subjects</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" id="cancelFacultyForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="facultyForm">Save Faculty</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Subject Modal -->
+    <div id="subjectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="subjectModalTitle">Add Subject</h3>
+                <button class="close-button" id="closeSubjectModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="subjectForm">
+                    <input type="hidden" id="subjectEditCode">
+                    <div class="form-group">
+                        <label for="subjectCodeModal">Subject Code (e.g., CS101):</label>
+                        <input type="text" id="subjectCodeModal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="subjectNameModal">Subject Name:</label>
+                        <input type="text" id="subjectNameModal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="subjectUnitsModal">Total Units:</label>
+                        <input type="number" id="subjectUnitsModal" step="0.1" min="0.5" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="subjectCourseCodeModal">Course Code:</label>
+                        <select id="subjectCourseCodeModal"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="subjectDescriptionModal">Description:</label>
+                        <textarea id="subjectDescriptionModal" rows="3" placeholder="Subject description..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" id="cancelSubjectForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="subjectForm">Save Subject</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Modal -->
+    <div id="sectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="sectionModalTitle">Add Section</h3>
+                <button class="close-button" id="closeSectionModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="sectionForm">
+                    <input type="hidden" id="sectionEditCode">
+                    <div class="form-group">
+                        <label for="sectionCodeModal">Section ID:</label>
+                        <input type="text" id="sectionCodeModal" readonly placeholder="Will be auto-generated">
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionCourseCodeModal">Course Code:</label>
+                        <select id="sectionCourseCodeModal" required>
+                            <option value="">-- Select Course --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionYearLevelModal">Year Level:</label>
+                        <select id="sectionYearLevelModal" required>
+                            <option value="">-- Select Year Level --</option>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionLetterModal">Section Letter:</label>
+                        <select id="sectionLetterModal" required>
+                            <option value="">-- Select Section --</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="G">G</option>
+                            <option value="H">H</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionNameModal">Section Name:</label>
+                        <input type="text" id="sectionNameModal" readonly placeholder="Will be auto-generated (e.g., BSIT 1-A)">
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionMaxCapacityModal">Max Capacity:</label>
+                        <input type="number" id="sectionMaxCapacityModal" min="1" value="30">
+                    </div>
+                    <div class="form-group">
+                        <label for="sectionCurrentEnrollmentModal">Current Enrollment:</label>
+                        <input type="number" id="sectionCurrentEnrollmentModal" min="0" value="0">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                 <button type="button" class="btn btn-secondary" id="cancelSectionForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="sectionForm">Save Section</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schedule Modal -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="scheduleModalTitle">Add Schedule Item</h3>
+                <button class="close-button" id="closeScheduleModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <input type="hidden" id="scheduleEditId">
+                    <div class="form-group">
+                        <label for="scheduleSubjectCodeModal">Subject Code:</label>
+                        <select id="scheduleSubjectCodeModal" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleDescriptionModal">Description:</label>
+                        <input type="text" id="scheduleDescriptionModal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleUnitsModal">Units:</label>
+                        <input type="number" id="scheduleUnitsModal" readonly style="background-color: #f5f5f5; color: #888;">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleLecModal">Lecture Hours:</label>
+                        <input type="number" id="scheduleLecModal" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleLabModal">Laboratory Hours:</label>
+                        <input type="number" id="scheduleLabModal" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleDayModal">Day:</label>
+                        <select id="scheduleDayModal" required>
+                            <option value="">-- Select Day --</option>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                            <option value="MWF">Monday, Wednesday, Friday (MWF)</option>
+                            <option value="TTh">Tuesday, Thursday (TTh)</option>
+                            <option value="MW">Monday, Wednesday (MW)</option>
+                            <option value="TThF">Tuesday, Thursday, Friday (TThF)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleTimeModal">Start Time:</label>
+                        <select id="scheduleTimeModal" required>
+                            <option value="">-- Select Start Time --</option>
+                            <option value="7:00">7:00</option>
+                            <option value="8:00">8:00</option>
+                            <option value="9:00">9:00</option>
+                            <option value="10:00">10:00</option>
+                            <option value="11:00">11:00</option>
+                            <option value="12:00">12:00</option>
+                            <option value="13:00">1:00 PM</option>
+                            <option value="14:00">2:00 PM</option>
+                            <option value="15:00">3:00 PM</option>
+                            <option value="16:00">4:00 PM</option>
+                            <option value="17:00">5:00 PM</option>
+                            <option value="18:00">6:00 PM</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleEndTimeModal">End Time:</label>
+                        <input type="time" id="scheduleEndTimeModal" required readonly placeholder="Will be auto-calculated" style="background-color: #f5f5f5; color: #888;">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleTimeRangeModal">Time Range:</label>
+                        <input type="text" id="scheduleTimeRangeModal" readonly placeholder="Will be auto-calculated" style="background-color: #f5f5f5; color: #888;">
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleRoomModal">Room:</label>
+                        <input type="text" id="scheduleRoomModal" placeholder="e.g., Room 101" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleFacultyModal">Faculty:</label>
+                        <select id="scheduleFacultyModal" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleAcademicYearModal">Academic Year:</label>
+                        <select id="scheduleAcademicYearModal" required>
+                            <option value="">-- Select Academic Year --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleSemesterModal">Semester:</label>
+                        <select id="scheduleSemesterModal" required>
+                            <option value="">-- Select Semester --</option>
+                            <option value="First Semester">First Semester</option>
+                            <option value="Second Semester">Second Semester</option>
+                            <option value="Summer">Summer</option>
+                        </select>
+                    </div>
+                </form>
+                <div id="scheduleErrorMsg" style="color: #b00; margin-top: 8px; min-height: 18px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelScheduleForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="scheduleForm">Save Schedule Item</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrollment Success Modal -->
+    <div id="enrollmentSuccessModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Success!</h3>
+                <button class="close-button" id="closeEnrollmentSuccessModal">×</button>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <img src="oasis.png" alt="OASIS Logo" style="width: 70px; height: 70px; margin-bottom: 15px;">
+                <p id="enrollmentSuccessMessage" style="font-size: 1.1em; margin-bottom: 15px;"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="confirmEnrollmentSuccess">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrollment Request Processing Modal -->
+    <div id="enrollmentProcessModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 id="processModalTitle">Process Enrollment Request</h3>
+                <button class="close-button" id="closeEnrollmentProcessModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="enrollmentRequestDetails" style="margin-bottom: 20px;">
+                    <p><strong>Student Name:</strong> <span id="requestStudentName"></span></p>
+                    <p><strong>Student ID:</strong> <span id="requestStudentId"></span></p>
+                    <p><strong>Preferred Course:</strong> <span id="requestPreferredCourse"></span></p>
+                    <p><strong>Term Applied:</strong> <span id="requestTerm"></span></p>
+                    <p><strong>Application Date:</strong> <span id="requestDate"></span></p>
+                </div>
+                <div class="form-group">
+                    <label for="enrollmentProcessReason">Remarks/Reason (optional):</label>
+                    <textarea id="enrollmentProcessReason" class="form-control" rows="3" placeholder="Enter any comments or reason for approval/rejection"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelEnrollmentProcess">Cancel</button>
+                <button type="button" class="btn btn-danger" id="rejectEnrollmentRequest">Reject</button>
+                <button type="button" class="btn btn-success" id="approveEnrollmentRequest">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Statement Modal -->
+    <div id="accountStatementModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3>Account Statement</h3>
+                <button class="close-button" id="closeAccountStatementModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="accountStatementDetails" style="margin-bottom: 20px;">
+                    <h4 id="statementStudentName"></h4>
+                    <p><strong>Student ID:</strong> <span id="statementStudentId"></span></p>
+                    <p><strong>Academic Year:</strong> <span id="statementAcademicYear"></span></p>
+                    <p><strong>Semester:</strong> <span id="statementSemester"></span></p>
+                    <p><strong>Total Balance:</strong> ₱<span id="statementTotalBalance"></span></p>
+                    <p><strong>Remaining Balance:</strong> ₱<span id="statementRemainingBalance"></span></p>
+                </div>
+                <div class="payment-history">
+                    <h5>Payment History</h5>
+                    <div id="paymentHistoryList" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px;">
+                        <!-- Payment history will be populated here -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="addPaymentButton">Add Payment</button>
+                <button type="button" class="btn btn-secondary" id="closeAccountStatement">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>Process Payment</h3>
+                <button class="close-button" id="closePaymentModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="paymentForm">
+                    <input type="hidden" id="paymentStudentId">
+                    <div class="form-group">
+                        <label for="paymentAmount">Amount (₱):</label>
+                        <input type="number" id="paymentAmount" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="paymentDate">Date:</label>
+                        <input type="date" id="paymentDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="paymentDescription">Description:</label>
+                        <input type="text" id="paymentDescription" placeholder="e.g., Tuition Fee Payment" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelPayment">Cancel</button>
+                <button type="submit" class="btn btn-success" form="paymentForm">Process Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Curriculum Modal -->
+    <div id="curriculumModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="curriculumModalTitle">Add Curriculum</h3>
+                <button class="close-button" id="closeCurriculumModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="curriculumForm">
+                    <input type="hidden" id="curriculumEditId">
+                    <div class="form-group">
+                        <label for="curriculumCourseCode">Course:</label>
+                        <select id="curriculumCourseCode" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="curriculumYearLevel">Year Level:</label>
+                        <select id="curriculumYearLevel" required>
+                            <option value="">-- Select Year Level --</option>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="curriculumSemester">Semester:</label>
+                        <select id="curriculumSemester" required>
+                            <option value="">-- Select Semester --</option>
+                            <option value="First Semester">First Semester</option>
+                            <option value="Second Semester">Second Semester</option>
+                            <option value="Summer">Summer</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="curriculumRequiredUnits">Required Units:</label>
+                        <input type="number" id="curriculumRequiredUnits" min="1" value="25" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="curriculumSubjects">Subjects:</label>
+                        <select id="curriculumSubjects" multiple required style="height: 120px;"></select>
+                        <small>Hold Ctrl (Windows) or Cmd (Mac) to select multiple subjects.</small>
+                        <div id="curriculumUnitsDisplay" style="margin-top:8px;"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelCurriculumForm">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="curriculumForm">Save Curriculum</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- <script src="data.js"></script> -->
+    <script src="auth.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OASIS - Student Portal</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="oasis.png">
+</head>
+<body>
+    <header class="dashboard-header">
+        <img src="oasis.png" alt="OASIS Logo" class="logo">
+        <h1 class="oasis-title">Opehlia Arts Student Information System - OASIS</h1>
+        <div class="user-info">
+            <span id="studentNameHeader">Student Name</span>
+            <button id="logoutButton" class="btn btn-sm btn-logout">Logout</button>
+        </div>
+    </header>
+
+    <div class="dashboard-layout">
+        <aside class="sidebar">
+            <nav>
+                <ul>
+                    <li><a href="#home" class="nav-link active" data-target="home">HOME</a></li>
+                    <li><a href="#enrollment" class="nav-link" data-target="enrollment">ENROLLMENT</a></li>
+                    <li><a href="#accounts" class="nav-link" data-target="accounts">ACCOUNTS</a></li>
+                    <li><a href="#schedule" class="nav-link" data-target="schedule">SCHEDULE</a></li>
+                    <li><a href="#grades" class="nav-link" data-target="grades">GRADES</a></li>
+                    <li><a href="#forms" class="nav-link" data-target="forms">FORMS</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="main-content">
+            <div class="student-info-bar" id="studentInfoBar">
+                <!-- Student Name (ID) - Populated by JS -->
+            </div>
+
+            <section id="home" class="content-section active">
+                <h2>Dashboard</h2>
+                <div class="oaa-card">
+                    <div class="oaa-card-header">
+                        Important Announcements
+                    </div>
+                    <div id="announcementsArea">
+                        <p>No new announcements at this time. Please check your inbox regularly.</p>
+                    </div>
+                </div>
+                <div class="oaa-card">
+                    <div class="oaa-card-header">
+                        INBOX (<span id="inboxCount">0</span> unread)
+                    </div>
+                    <div id="inboxMessages">
+                        <!-- Inbox messages will be rendered here by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <section id="enrollment" class="content-section">
+                <h2>Enrollment Information</h2>
+                <div id="enrollmentStatusContainer">
+                    <!-- Content dynamically loaded by student.js based on enrollment status -->
+                </div>
+            </section>
+
+            <section id="accounts" class="content-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2>Account Statement</h2>
+                    <button id="refreshAccountsBtn" class="btn btn-sm btn-primary" style="margin-left: 10px;">
+                        <span>🔄</span> Refresh Account
+                    </button>
+                </div>
+                <p>View your assessment, payments, and outstanding balance.</p>
+                <table id="accountsTable">
+                    <thead>
+                        <tr>
+                            <th>School Year</th>
+                            <th>Semester</th>
+                            <th>Scholarship</th>
+                            <th>O.R. Date</th>
+                            <th>O.R. No.</th>
+                            <th>Assessment</th>
+                            <th>Payment</th>
+                            <th>Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+
+            <section id="schedule" class="content-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2>Class Schedule</h2>
+                    <button id="refreshScheduleBtn" class="btn btn-sm btn-primary" style="margin-left: 10px;">
+                        <span>🔄</span> Refresh Schedule
+                    </button>
+                </div>
+                <p>Current Term: S.Y. <strong id="scheduleSY">N/A</strong> - <strong id="scheduleSem">N/A</strong></p>
+                <table id="scheduleTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Subject Code</th>
+                            <th>Description</th>
+                            <th>Units</th>
+                            <th>Lec</th>
+                            <th>Lab</th>
+                            <th>Day & Time</th>
+                            <th>Room</th>
+                            <th>Faculty</th>
+                        </tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+
+            <section id="grades" class="content-section" aria-labelledby="gradesHeader">
+                <div id="gradesSectionWrapper" style="max-width: 1000px; margin: 0 auto;">
+                    <h2 id="gradesHeader">Academic Grades</h2>
+                    <div id="gradesNotification" aria-live="polite" style="min-height:24px;"></div>
+                    <div style="margin-bottom: 15px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                        <label for="gradesYearSelect"><strong>Academic Year:</strong></label>
+                        <select id="gradesYearSelect" style="margin-right: 20px;"></select>
+                        <label for="gradesSemSelect"><strong>Semester:</strong></label>
+                        <select id="gradesSemSelect"></select>
+                    </div>
+                    <p>Current Term: S.Y. <strong id="gradesSY">N/A</strong> - <strong id="gradesSem">N/A</strong></p>
+                    <div style="margin-bottom: 15px;">
+                        <span><strong>Admission Status:</strong> <span id="admissionStatus">N/A</span></span> |
+                        <span><strong>Scholastic Status:</strong> <span id="scholasticStatus">N/A</span></span>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <span><strong>Course:</strong> <span id="courseDescription">N/A</span></span> |
+                        <span><strong>Term GPA:</strong> <span id="termGPA">N/A</span></span> |
+                        <span><strong>Cumulative GPA:</strong> <span id="cumulativeGPA">N/A</span></span>
+                    </div>
+                    <div style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px; border-left: 4px solid #28a745;">
+                        <strong>Note:</strong> Only released grades are displayed. Grades that have not been released by your instructors will show as "N/A".
+                    </div>
+                    <div id="gradesLoading" style="display:none;text-align:center;padding:10px;color:#888;"></div>
+                    <div style="overflow-x:auto;">
+                        <table id="gradesTable" aria-describedby="gradesHeader" style="min-width: 700px;">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Subject Code</th>
+                                    <th>Subject Name</th>
+                                    <th>Units</th>
+                                    <th>Grade</th>
+                                    <th>Numeric Grade</th>
+                                    <th>GPA</th>
+                                    <th>Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody><!-- Populated by JS --></tbody>
+                        </table>
+                    </div>
+                    <div id="gradesDebugPanel" style="font-size:0.95em; margin-top:10px; color:#555;"></div>
+                </div>
+            </section>
+
+            <section id="forms" class="content-section">
+                <h2>Downloadable Forms</h2>
+                <div id="studentCurriculumContainer" style="margin-bottom: 32px;"></div>
+                <p>Access important school forms here.</p>
+                <table id="formsTable">
+                    <thead>
+                        <tr><th>Form Name</th><th>Action</th></tr>
+                    </thead>
+                    <tbody><!-- Populated by JS --></tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <!-- Enrollment Approved Modal -->
+    <div id="enrollmentApprovedModal" class="modal">
+        <div class="modal-content" style="max-width: 500px; text-align: center; background: linear-gradient(135deg, #e0ffe6 0%, #f0f9ff 100%); box-shadow: 0 8px 32px rgba(40,167,69,0.15); border-radius: 18px;">
+            <div class="modal-header" style="justify-content: center; border-bottom: none;">
+                <h3 style="font-size: 2em; color: var(--success-color); margin-bottom: 0;">🎉 Congratulations! 🎉</h3>
+            </div>
+            <div class="modal-body" style="padding-top: 0;">
+                <img src="oasis.png" alt="OASIS Logo" style="width: 90px; height: 90px; margin-bottom: 18px; border-radius: 50%; box-shadow: 0 2px 12px rgba(40,167,69,0.12); border: 3px solid #28a745; background: #fff;">
+                <p id="enrollmentApprovedStudentName" style="font-weight: bold; font-size: 1.2em; margin-bottom:8px;"></p>
+                <p id="enrollmentApprovedMessage" style="font-size: 1.15em; margin-bottom:18px; color: #155724;">
+                  You are now <strong>officially enrolled</strong> in <strong id="enrollmentApprovedCourse"></strong> for S.Y. <strong id="enrollmentApprovedTermSY"></strong> - <strong id="enrollmentApprovedTermSem"></strong>!<br>
+                  <span style="display:inline-block;margin-top:8px;">Welcome to the OASIS family. We wish you a successful and fulfilling academic journey!</span>
+                </p>
+                <p style="color:#155724;">Check your <strong>Class Schedule</strong> and <strong>Account Statement</strong> for more details.</p>
+            </div>
+            <div class="modal-footer" style="justify-content: center; border-top: 1px solid var(--border-color); padding-top:15px;">
+                <button type="button" class="btn btn-success" id="closeEnrollmentApprovedModal" style="padding: 12px 32px; font-size:1.15em; border-radius: 8px;">Proceed to Portal</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="student.js"></script>
+    <style>
+    .oasis-title {
+        font-family: 'Papyrus', 'Comic Sans MS', cursive, fantasy;
+        font-size: 2.1em;
+        color: #1976d2;
+        letter-spacing: 1.5px;
+        text-shadow: 1px 1px 0 #fff, 2px 2px 4px #b2b2b2;
+        padding: 8px 18px;
+        border-radius: 8px;
+        margin: 0 0 0 8px;
+        display: inline-block;
+    }
+    </style>
+</body>
+</html>
