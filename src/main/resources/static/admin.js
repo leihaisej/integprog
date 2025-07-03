@@ -757,9 +757,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const password = form.studentPasswordModal.value;
             const courseCode = form.studentCourseModal.value;
             const sectionCode = form.studentSectionModal.value;
-            const status = form.studentStatusModal.value;
-            const admissionStatus = form.studentAdmissionStatusModal.value;
-            const scholasticStatus = form.studentScholasticStatusModal.value;
+            const status = form.studentStatusModal.value || 'Enrolled';
+            const admissionStatus = form.studentAdmissionStatusModal.value || 'Regular';
+            const scholasticStatus = form.studentScholasticStatusModal.value || 'Good Standing';
             if (!id || !name || !courseCode) {
                 showNotification('Student ID, name, and course are required.', 'error');
                 return false;
@@ -772,7 +772,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 section: sectionCode,
                 status,
                 admissionStatus,
-                scholasticStatus
+                scholasticStatus,
+                role: 'student'
             };
             try {
                 let response;
@@ -796,6 +797,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 await loadStudentsTable();
                 showNotification('Student saved successfully.', 'success');
+                // Close and reset modal on success
+                document.getElementById('studentModal').style.display = 'none';
+                document.body.style.overflow = '';
+                document.getElementById('studentForm').reset();
                 return true;
             } catch (e) {
                 showNotification(e.message, 'error');
@@ -806,14 +811,69 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('studentModalTitle').textContent = "Add Student";
             document.getElementById('studentForm').reset();
             document.getElementById('studentEditId').value = '';
-            document.getElementById('studentIdModal').readOnly = false;
+            // Auto-generate a unique Student ID in the format 2025-00001-OA-0 (auto-increment)
+            const year = new Date().getFullYear();
+            let nextNum = 1;
+            try {
+                const response = await fetch('/api/auth/users');
+                if (response.ok) {
+                    const users = await response.json();
+                    // Filter only students with correct ID format
+                    const studentIds = users
+                        .filter(u => u.role === 'student' && u.id && u.id.startsWith(year + '-'))
+                        .map(u => {
+                            const match = u.id.match(/-(\d{5})-OA-0$/);
+                            return match ? parseInt(match[1], 10) : null;
+                        })
+                        .filter(num => num !== null);
+                    if (studentIds.length > 0) {
+                        nextNum = Math.max(...studentIds) + 1;
+                    }
+                }
+            } catch (e) {
+                // fallback: nextNum stays 1
+            }
+            const uniqueNum = nextNum.toString().padStart(5, '0');
+            const generatedId = `${year}-${uniqueNum}-OA-0`;
+            const studentIdInput = document.getElementById('studentIdModal');
+            studentIdInput.value = generatedId;
+            studentIdInput.readOnly = true;
             await populateCourseDropdownForStudent('studentCourseModal', '', false);
             document.getElementById('studentCourseModal').onchange = (e) => {
                 populateSectionDropdown('studentSectionModal', '', e.target.value);
             };
             document.getElementById('studentSectionModal').innerHTML = '';
-        }, 'cancelStudentForm'
+            // Populate status dropdowns
+            populateStatusDropdown('studentStatusModal', '', systemStatusOptions, 'System Status');
+            populateStatusDropdown('studentAdmissionStatusModal', '', admissionStatusOptions, 'Admission Status');
+            populateStatusDropdown('studentScholasticStatusModal', '', scholasticStatusOptions, 'Scholastic Status');
+            // Reset password field and placeholder
+            const passwordInput = document.getElementById('studentPasswordModal');
+            passwordInput.value = '';
+            passwordInput.placeholder = '';
+            // Ensure password toggle works
+            const toggleBtn = document.getElementById('toggleStudentPassword');
+            if (toggleBtn) {
+                toggleBtn.onclick = () => {
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        toggleBtn.innerHTML = '<i>Hide</i>';
+                    } else {
+                        passwordInput.type = 'password';
+                        toggleBtn.innerHTML = '<i>Show</i>';
+                    }
+                };
+            }
+        },
+        'cancelStudentForm'
     );
+
+    // Ensure cancel button closes and resets modal
+    document.getElementById('cancelStudentForm').onclick = () => {
+        document.getElementById('studentModal').style.display = 'none';
+        document.body.style.overflow = '';
+        document.getElementById('studentForm').reset();
+    };
 
     // When editing a student
     function openEditStudentModal(student) {
@@ -857,13 +917,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/auth/users');
             if (response.ok) {
                 users = await response.json();
+                console.log('Users from backend:', users); // DEBUG LINE
             }
         } catch (e) {
             console.error('Failed to fetch users from backend:', e);
         }
-        // Only show students who are not new applicants (i.e., not pending/request)
-        const students = users.filter(u => u.role === 'student' && u.admissionStatus !== 'New' && u.status !== 'New Applicant')
+        // Show all users except admin
+        const students = users.filter(u => u.id !== 'admin')
             .sort((a,b) => a.name.localeCompare(b.name));
+        console.log('Filtered students:', students); // DEBUG LINE
         const tableBody = document.getElementById('studentsTable')?.querySelector('tbody');
         if (!tableBody) return;
         tableBody.innerHTML = '';
@@ -911,6 +973,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
             actionsCell.appendChild(editBtn); actionsCell.appendChild(deleteBtn);
+        });
+        users.forEach(u => {
+            console.log(`User: id=${u.id}, name=${u.name}, admissionStatus=${u.admissionStatus}, status=${u.status}`);
         });
     }
 
