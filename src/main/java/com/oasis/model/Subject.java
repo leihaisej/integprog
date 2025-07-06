@@ -25,15 +25,23 @@ public class Subject {
     @Column(name = "description", length = 500)
     private String description;
 
+    @Column(name = "lec")
+    private Integer lec;
+
+    @Column(name = "lab")
+    private Integer lab;
+
     // Constructors
     public Subject() {}
 
-    public Subject(String code, String name, Integer units, String courseCode, String description) {
+    public Subject(String code, String name, Integer units, String courseCode, String description, Integer lec, Integer lab) {
         this.code = code;
         this.name = name;
         this.units = units;
         this.courseCode = courseCode;
         this.description = description;
+        this.lec = lec;
+        this.lab = lab;
     }
 
     // Getters and Setters
@@ -75,5 +83,21 @@ public class Subject {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public Integer getLec() {
+        return lec;
+    }
+
+    public void setLec(Integer lec) {
+        this.lec = lec;
+    }
+
+    public Integer getLab() {
+        return lab;
+    }
+
+    public void setLab(Integer lab) {
+        this.lab = lab;
     }
 }

@@ -129,9 +129,9 @@ public class DataInitializationService implements CommandLineRunner {
 
         // Initialize Subjects
         List<Subject> subjects = Arrays.asList(
-            new Subject("CS101", "Intro to Programming", 3, "BSIT", "Fundamental programming concepts."),
-            new Subject("IT201", "Web Development", 3, "BSIT", "Client-side and server-side web development."),
-            new Subject("GENMATH", "General Mathematics", 3, null, "Basic college mathematics.")
+            new Subject("CS101", "Intro to Programming", 3, "BSIT", "Fundamental programming concepts.", 3, 0),
+            new Subject("IT201", "Web Development", 3, "BSIT", "Client-side and server-side web development.", 2, 1),
+            new Subject("GENMATH", "General Mathematics", 3, null, "Basic college mathematics.", 3, 0)
         );
         subjectRepository.saveAll(subjects);
 
@@ -144,9 +144,9 @@ public class DataInitializationService implements CommandLineRunner {
 
         // Initialize Schedule Items
         List<ScheduleItem> scheduleItems = Arrays.asList(
-            new ScheduleItem("2025-00001-OA-0", "CS101", "Intro to Programming", 3, 2, 1, "MWF 9:00-10:00 AM", "Room 101", "Prof. Reyes", "2025-2026", "First Semester"),
-            new ScheduleItem("2025-00001-OA-0", "GENMATH", "General Mathematics", 3, 3, 0, "TTh 10:00-11:30 AM", "Room 102", "Prof. Santos", "2025-2026", "First Semester"),
-            new ScheduleItem("2025-00002-OA-0", "GENMATH", "General Mathematics", 3, 3, 0, "MWF 1:00-2:30 PM", "Room 103", "Prof. Santos", "2025-2026", "First Semester")
+            new ScheduleItem("2025-00001-OA-0", "CS101", "Intro to Programming", 3, 2, 1, "MWF", "09:00", "10:00", "Room 101", "Prof. Reyes", "2025-2026", "First Semester"),
+            new ScheduleItem("2025-00001-OA-0", "GENMATH", "General Mathematics", 3, 3, 0, "TTh", "10:00", "11:30", "Room 102", "Prof. Santos", "2025-2026", "First Semester"),
+            new ScheduleItem("2025-00002-OA-0", "GENMATH", "General Mathematics", 3, 3, 0, "MWF", "13:00", "14:30", "Room 103", "Prof. Santos", "2025-2026", "First Semester")
         );
         scheduleItemRepository.saveAll(scheduleItems);
 

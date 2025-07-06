@@ -668,6 +668,142 @@ td .btn {
     }
 }
 
+/* --- Stepper/Card UI for Manage Student Schedules --- */
+.schedule-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 18px;
+  align-items: flex-start;
+}
+.step-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px #e3e3e3;
+  padding: 18px 22px 16px 22px;
+  min-width: 260px;
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 0;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.step-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+.step-header {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--primary-text-color);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: #fff;
+  font-size: 1.1em;
+  font-weight: 700;
+  margin-right: 8px;
+  box-shadow: 0 1px 4px #f8bbd0;
+  transition: all 0.3s ease;
+}
+
+.step-number:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(255, 89, 178, 0.4);
+}
+.step-select {
+  width: 100%;
+  max-width: 260px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 1em;
+  margin-bottom: 8px;
+  background: #f9f9f9;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.step-select:disabled {
+  background: #f3f3f3;
+  color: #aaa;
+  cursor: not-allowed;
+}
+.step-message {
+  color: var(--text-muted-color);
+  font-size: 0.98em;
+  margin-top: 4px;
+  margin-bottom: 0;
+  min-height: 18px;
+  font-style: italic;
+  line-height: 1.4;
+}
+.step-action-btn {
+  margin-right: 10px;
+  margin-bottom: 6px;
+  min-width: 170px;
+  font-size: 1em;
+  font-weight: 500;
+  padding: 10px 18px;
+  transition: all 0.3s ease;
+}
+
+.step-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.step-action-btn:disabled:hover {
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.filter-row .step-select {
+  flex: 1;
+  max-width: none;
+  margin-bottom: 0;
+}
+@media (max-width: 900px) {
+  .schedule-steps {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .step-card {
+    min-width: 0;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .filter-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .filter-row .step-select {
+    width: 100%;
+  }
+}
+/* --- End Stepper/Card UI --- */
+
 @media (max-width: 768px) {
     body {
         font-size: 14px;
@@ -1277,4 +1413,221 @@ td .btn {
 
 #paymentHistoryList div:last-child {
     border-bottom: none;
+}
+
+/* Minimalistic style for section dropdown in Manage Schedules */
+#scheduleSectionSelect {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    padding: 8px 12px;
+    font-size: 1em;
+    margin-right: 10px;
+    min-width: 180px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    transition: border-color 0.2s;
+}
+#scheduleSectionSelect:focus {
+    border-color: #ff59b2;
+    outline: none;
+}
+/* Keep controls row clean and spaced */
+.schedule-controls {
+    gap: 18px !important;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Minimalistic batch grade encoding styles */
+#batchGradeControls {
+    margin-bottom: 18px;
+    gap: 18px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+#batchGradesTable {
+    margin-bottom: 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px #e3e3e3;
+    background: #fff;
+}
+#batchGradesTable th, #batchGradesTable td {
+    padding: 8px 10px;
+    border: 1px solid #e0e0e0;
+    font-size: 1em;
+}
+#batchGradesTable th {
+    background: #e91e63;
+    color: #fff;
+    font-weight: 600;
+}
+#batchGradesTable tr:nth-child(even) {
+    background: #fce4ec;
+}
+#batchGradesTable tr:hover {
+    background: #f8bbd0;
+}
+#batchGradeActions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+#saveAllGradesBtn, #releaseAllGradesBtn {
+    min-width: 140px;
+}
+
+#saveAllGradesBtn, #releaseAllGradesBtn {
+    margin-right: 10px;
+}
+
+/* Grade Encoding Enhancements */
+.batch-grade-input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+}
+
+.batch-grade-input:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.batch-remarks-input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+    min-width: 120px;
+}
+
+.grade-status-released {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.grade-status-unreleased {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.grade-status-pending {
+    color: #6c757d;
+    font-style: italic;
+}
+
+#gradeConversionInfo {
+    transition: all 0.3s ease;
+}
+
+.grade-statistics-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.grade-statistics-card h5 {
+    margin-top: 0;
+    color: #495057;
+    border-bottom: 2px solid #007bff;
+    padding-bottom: 8px;
+}
+
+.grade-statistics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.grade-stat-item {
+    text-align: center;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+}
+
+.grade-stat-value {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #007bff;
+    display: block;
+}
+
+.grade-stat-label {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+/* Enhanced grade input styling */
+#finalGradeInput {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+#finalGradeInput:valid {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+#finalGradeInput:invalid {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+/* Grade action buttons */
+.btn-grade-action {
+    margin: 2px;
+    font-size: 0.8em;
+    padding: 4px 8px;
+}
+
+.btn-grade-release {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-grade-release:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.btn-grade-unrelease {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.btn-grade-unrelease:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
+    color: #212529;
+}
+
+/* Responsive design for grade tables */
+@media (max-width: 768px) {
+    .grade-statistics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .batch-grade-input,
+    .batch-remarks-input {
+        font-size: 0.8em;
+        padding: 2px 4px;
+    }
+    
+    #batchGradeControls {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    #batchGradeControls .form-group {
+        min-width: auto;
+    }
 }

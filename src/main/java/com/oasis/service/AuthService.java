@@ -160,6 +160,16 @@ public class AuthService {
         return subjectRepository.findAll();
     }
 
+    public List<Subject> getSubjectsByCourse(String courseCode) {
+        List<Subject> subjects = subjectRepository.findByCourseCodeIgnoreCase(courseCode);
+        // Ensure lec/lab are not null (for legacy data)
+        for (Subject s : subjects) {
+            if (s.getLec() == null) s.setLec(0);
+            if (s.getLab() == null) s.setLab(0);
+        }
+        return subjects;
+    }
+
     // --- Faculty Management ---
     public List<Faculty> getAllFaculty() {
         return facultyRepository.findAll();
@@ -188,7 +198,12 @@ public class AuthService {
         List<ScheduleItem> studentSchedules = scheduleItemRepository.findByStudentIdIgnoreCaseAndAcademicYearAndSemester(
             scheduleItem.getStudentId(), scheduleItem.getAcademicYear(), scheduleItem.getSemester());
         for (ScheduleItem existing : studentSchedules) {
-            if (existing.getDayTime().equalsIgnoreCase(scheduleItem.getDayTime()) &&
+            if (existing.getDay() != null && scheduleItem.getDay() != null &&
+                existing.getDay().compareTo(scheduleItem.getDay()) == 0 &&
+                existing.getStartTime() != null && scheduleItem.getStartTime() != null &&
+                existing.getEndTime() != null && scheduleItem.getEndTime() != null &&
+                existing.getStartTime().compareTo(scheduleItem.getEndTime()) < 0 &&
+                existing.getEndTime().compareTo(scheduleItem.getStartTime()) > 0 &&
                 existing.getRoom().equalsIgnoreCase(scheduleItem.getRoom())) {
                 throw new IllegalArgumentException("Schedule conflict: Student already has a class in this room at this day/time.");
             }
@@ -199,7 +214,11 @@ public class AuthService {
                 .filter(s -> scheduleItem.getFaculty().equalsIgnoreCase(s.getFaculty()) &&
                             scheduleItem.getAcademicYear().equalsIgnoreCase(s.getAcademicYear()) &&
                             scheduleItem.getSemester().equalsIgnoreCase(s.getSemester()) &&
-                            scheduleItem.getDayTime().equalsIgnoreCase(s.getDayTime()))
+                            scheduleItem.getDay() != null && scheduleItem.getStartTime() != null && scheduleItem.getEndTime() != null &&
+                            s.getDay() != null && s.getStartTime() != null && s.getEndTime() != null &&
+                            s.getDay().compareTo(scheduleItem.getDay()) == 0 &&
+                            s.getStartTime().compareTo(scheduleItem.getEndTime()) < 0 &&
+                            s.getEndTime().compareTo(scheduleItem.getStartTime()) > 0)
                 .toList();
             if (!facultySchedules.isEmpty()) {
                 throw new IllegalArgumentException("Schedule conflict: Faculty is already assigned to another class at this day/time.");
@@ -219,7 +238,11 @@ public class AuthService {
                 scheduleItem.getStudentId(), scheduleItem.getAcademicYear(), scheduleItem.getSemester());
             for (ScheduleItem s : studentSchedules) {
                 if (!s.getId().equals(id) &&
-                    s.getDayTime().equalsIgnoreCase(scheduleItem.getDayTime()) &&
+                    s.getDay() != null && scheduleItem.getDay() != null &&
+                    s.getStartTime() != null && scheduleItem.getStartTime() != null &&
+                    s.getEndTime() != null && scheduleItem.getEndTime() != null &&
+                    s.getStartTime().compareTo(scheduleItem.getEndTime()) < 0 &&
+                    s.getEndTime().compareTo(scheduleItem.getStartTime()) > 0 &&
                     s.getRoom().equalsIgnoreCase(scheduleItem.getRoom())) {
                     throw new IllegalArgumentException("Schedule conflict: Student already has a class in this room at this day/time.");
                 }
@@ -231,7 +254,11 @@ public class AuthService {
                                 scheduleItem.getFaculty().equalsIgnoreCase(s.getFaculty()) &&
                                 scheduleItem.getAcademicYear().equalsIgnoreCase(s.getAcademicYear()) &&
                                 scheduleItem.getSemester().equalsIgnoreCase(s.getSemester()) &&
-                                scheduleItem.getDayTime().equalsIgnoreCase(s.getDayTime()))
+                                scheduleItem.getDay() != null && scheduleItem.getStartTime() != null && scheduleItem.getEndTime() != null &&
+                                s.getDay() != null && s.getStartTime() != null && s.getEndTime() != null &&
+                                s.getDay().compareTo(scheduleItem.getDay()) == 0 &&
+                                s.getStartTime().compareTo(scheduleItem.getEndTime()) < 0 &&
+                                s.getEndTime().compareTo(scheduleItem.getStartTime()) > 0)
                     .toList();
                 if (!facultySchedules.isEmpty()) {
                     throw new IllegalArgumentException("Schedule conflict: Faculty is already assigned to another class at this day/time.");
@@ -244,7 +271,9 @@ public class AuthService {
             existingItem.setUnits(scheduleItem.getUnits());
             existingItem.setLec(scheduleItem.getLec());
             existingItem.setLab(scheduleItem.getLab());
-            existingItem.setDayTime(scheduleItem.getDayTime());
+            existingItem.setDay(scheduleItem.getDay());
+            existingItem.setStartTime(scheduleItem.getStartTime());
+            existingItem.setEndTime(scheduleItem.getEndTime());
             existingItem.setRoom(scheduleItem.getRoom());
             existingItem.setFaculty(scheduleItem.getFaculty());
             existingItem.setAcademicYear(scheduleItem.getAcademicYear());
@@ -463,6 +492,8 @@ public class AuthService {
         }
         final String finalCourseCode = resolvedCourseCode;
         userRepository.findByIdIgnoreCase(id).ifPresent(existingUser -> {
+            // Track previous section
+            String prevSection = existingUser.getSection();
             // Update fields but preserve the ID
             existingUser.setName(user.getName());
             if (user.getPassword() != null && !user.getPassword().trim().isEmpty()) {
@@ -477,6 +508,42 @@ public class AuthService {
             existingUser.setCurrentSY(user.getCurrentSY());
             existingUser.setCurrentSem(user.getCurrentSem());
             userRepository.save(existingUser);
+            // If section changed and is not null, assign all section schedules to this student
+            String newSection = user.getSection();
+            if (newSection != null && !newSection.isEmpty() && !newSection.equals(prevSection)) {
+                // Find all schedules for this section (by looking for other students in the section)
+                List<User> sectionStudents = getAllUsers().stream()
+                    .filter(u -> "student".equalsIgnoreCase(u.getRole()) && newSection.equalsIgnoreCase(u.getSection()) && !u.getId().equals(id))
+                    .toList();
+                List<ScheduleItem> sectionSchedules = new ArrayList<>();
+                for (User s : sectionStudents) {
+                    List<ScheduleItem> scheds = scheduleItemRepository.findByStudentIdIgnoreCase(s.getId());
+                    sectionSchedules.addAll(scheds);
+                }
+                // Remove existing schedules for this student for the same academic year/semester/subject
+                List<ScheduleItem> mySchedules = scheduleItemRepository.findByStudentIdIgnoreCase(id);
+                for (ScheduleItem sched : mySchedules) {
+                    scheduleItemRepository.delete(sched);
+                }
+                // Assign all section schedules to this student
+                for (ScheduleItem sched : sectionSchedules) {
+                    ScheduleItem newSched = new ScheduleItem();
+                    newSched.setStudentId(id);
+                    newSched.setSubjectCode(sched.getSubjectCode());
+                    newSched.setDescription(sched.getDescription());
+                    newSched.setUnits(sched.getUnits());
+                    newSched.setLec(sched.getLec());
+                    newSched.setLab(sched.getLab());
+                    newSched.setDay(sched.getDay());
+                    newSched.setStartTime(sched.getStartTime());
+                    newSched.setEndTime(sched.getEndTime());
+                    newSched.setRoom(sched.getRoom());
+                    newSched.setFaculty(sched.getFaculty());
+                    newSched.setAcademicYear(sched.getAcademicYear());
+                    newSched.setSemester(sched.getSemester());
+                    scheduleItemRepository.save(newSched);
+                }
+            }
         });
     }
 
@@ -544,7 +611,7 @@ public class AuthService {
                 // Add a generic subject for this course
                 String subjCode = course.getCode() + "101";
                 String subjName = "Introduction to " + course.getName();
-                Subject newSubject = new Subject(subjCode, subjName, 3, course.getCode(), "Introductory subject for " + course.getName());
+                Subject newSubject = new Subject(subjCode, subjName, 3, course.getCode(), "Introductory subject for " + course.getName(), 3, 0);
                 addSubject(newSubject);
             }
         }
@@ -612,5 +679,83 @@ public class AuthService {
 
     public List<Section> getSectionsByCourseCode(String courseCode) {
         return sectionRepository.findAllByCourseCodeIgnoreCase(courseCode);
+    }
+
+    public int addBulkScheduleItemsBySection(String sectionId, ScheduleItem scheduleDetails) {
+        // Find all students in the section
+        List<User> students = getAllUsers().stream()
+            .filter(u -> "student".equalsIgnoreCase(u.getRole()) && sectionId.equalsIgnoreCase(u.getSection()))
+            .toList();
+        List<String> conflictStudents = new ArrayList<>();
+        for (User student : students) {
+            List<ScheduleItem> existing = getStudentSchedules(student.getId(), scheduleDetails.getAcademicYear(), scheduleDetails.getSemester());
+            for (ScheduleItem sched : existing) {
+                if (sched.getDay().equalsIgnoreCase(scheduleDetails.getDay()) &&
+                    timesOverlap(sched.getStartTime(), sched.getEndTime(), scheduleDetails.getStartTime(), scheduleDetails.getEndTime())) {
+                    conflictStudents.add(student.getId());
+                    break;
+                }
+            }
+        }
+        if (!conflictStudents.isEmpty()) {
+            throw new RuntimeException("Overlapping schedule detected for students: " + String.join(", ", conflictStudents));
+        }
+        List<ScheduleItem> items = new ArrayList<>();
+        for (User student : students) {
+            ScheduleItem item = new ScheduleItem();
+            item.setStudentId(student.getId());
+            item.setSubjectCode(scheduleDetails.getSubjectCode());
+            item.setDescription(scheduleDetails.getDescription());
+            item.setUnits(scheduleDetails.getUnits());
+            item.setLec(scheduleDetails.getLec());
+            item.setLab(scheduleDetails.getLab());
+            item.setDay(scheduleDetails.getDay());
+            item.setStartTime(scheduleDetails.getStartTime());
+            item.setEndTime(scheduleDetails.getEndTime());
+            item.setRoom(scheduleDetails.getRoom());
+            item.setFaculty(scheduleDetails.getFaculty());
+            item.setAcademicYear(scheduleDetails.getAcademicYear());
+            item.setSemester(scheduleDetails.getSemester());
+            items.add(item);
+        }
+        scheduleItemRepository.saveAll(items);
+        return items.size();
+    }
+
+    // Helper to check if two time ranges overlap (format: "HH:mm")
+    private boolean timesOverlap(String start1, String end1, String start2, String end2) {
+        if (start1 == null || end1 == null || start2 == null || end2 == null) return false;
+        int s1 = toMinutes(start1);
+        int e1 = toMinutes(end1);
+        int s2 = toMinutes(start2);
+        int e2 = toMinutes(end2);
+        return s1 < e2 && s2 < e1;
+    }
+    private int toMinutes(String time) {
+        String[] parts = time.split(":");
+        return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+    }
+
+    // Get all schedules for a section
+    public List<ScheduleItem> getSchedulesForSection(String sectionId) {
+        // Find all students in the section and get their schedules
+        List<User> students = getAllUsers().stream()
+            .filter(u -> "student".equalsIgnoreCase(u.getRole()) && sectionId.equalsIgnoreCase(u.getSection()))
+            .toList();
+        List<ScheduleItem> allSchedules = new ArrayList<>();
+        for (User student : students) {
+            List<ScheduleItem> schedules = getStudentSchedules(student.getId(), null, null);
+            allSchedules.addAll(schedules);
+        }
+        return allSchedules;
+    }
+
+    public int addBulkScheduleItemsByCourse(String courseCode, ScheduleItem scheduleDetails) {
+        List<Section> sections = getSectionsByCourseCode(courseCode);
+        int totalAssigned = 0;
+        for (Section section : sections) {
+            totalAssigned += addBulkScheduleItemsBySection(section.getId(), scheduleDetails);
+        }
+        return totalAssigned;
     }
 }

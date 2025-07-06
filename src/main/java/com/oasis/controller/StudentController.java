@@ -100,6 +100,9 @@ public class StudentController {
     @GetMapping("/grades/{studentId}")
     public ResponseEntity<List<StudentGrade>> getGrades(@PathVariable String studentId) {
         List<StudentGrade> grades = studentService.getStudentGrades(studentId).orElse(Collections.emptyList());
+        if (grades == null) {
+            grades = Collections.emptyList();
+        }
         return ResponseEntity.ok(grades);
     }
 
@@ -214,6 +217,9 @@ public class StudentController {
             return ResponseEntity.badRequest().build();
         }
         List<StudentGrade> grades = gradeService.getGradesForStudent(studentId, semester, academicYear);
+        if (grades == null) {
+            grades = Collections.emptyList();
+        }
         return ResponseEntity.ok(grades);
     }
     
@@ -230,6 +236,9 @@ public class StudentController {
         System.out.println("Academic Year: " + academicYear);
         
         List<StudentGrade> grades = gradeService.getReleasedGradesForStudent(studentId, semester, academicYear);
+        if (grades == null) {
+            grades = Collections.emptyList();
+        }
         
         System.out.println("Found " + grades.size() + " released grades");
         for (StudentGrade grade : grades) {
@@ -251,7 +260,7 @@ public class StudentController {
             "studentId", studentId,
             "semester", semester,
             "academicYear", academicYear,
-            "termGPA", termGPA
+            "termGPA", termGPA != null ? termGPA : 0.0
         );
         return ResponseEntity.ok(response);
     }
@@ -262,7 +271,7 @@ public class StudentController {
         Double cumulativeGPA = gradeService.calculateCumulativeGPA(studentId);
         Map<String, Object> response = Map.of(
             "studentId", studentId,
-            "cumulativeGPA", cumulativeGPA
+            "cumulativeGPA", cumulativeGPA != null ? cumulativeGPA : 0.0
         );
         return ResponseEntity.ok(response);
     }

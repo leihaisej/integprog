@@ -48,19 +48,28 @@ public class ScheduleItem {
     @Column(name = "semester", length = 20)
     private String semester;
 
+    @Column(name = "day", length = 20)
+    private String day;
+    
+    @Column(name = "start_time", length = 10)
+    private String startTime;
+    
+    @Column(name = "end_time", length = 10)
+    private String endTime;
+
     // Constructors
     public ScheduleItem() {}
 
-    public ScheduleItem(String studentId, String subjectCode, String description, Integer units, 
-                       Integer lec, Integer lab, String dayTime, String room, String faculty, 
-                       String academicYear, String semester) {
+    public ScheduleItem(String studentId, String subjectCode, String description, Integer units, Integer lec, Integer lab, String day, String startTime, String endTime, String room, String faculty, String academicYear, String semester) {
         this.studentId = studentId;
         this.subjectCode = subjectCode;
         this.description = description;
         this.units = units;
         this.lec = lec;
         this.lab = lab;
-        this.dayTime = dayTime;
+        this.day = day;
+        this.startTime = startTime;
+        this.endTime = endTime;
         this.room = room;
         this.faculty = faculty;
         this.academicYear = academicYear;
@@ -162,5 +171,29 @@ public class ScheduleItem {
 
     public void setSemester(String semester) {
         this.semester = semester;
+    }
+
+    public String getDay() {
+        return day;
+    }
+
+    public void setDay(String day) {
+        this.day = day;
+    }
+
+    public String getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(String startTime) {
+        this.startTime = startTime;
+    }
+
+    public String getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(String endTime) {
+        this.endTime = endTime;
     }
 }

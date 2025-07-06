@@ -888,7 +888,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             row.insertCell().textContent = item.units || 'N/A';
             row.insertCell().textContent = item.lec || 'N/A';
             row.insertCell().textContent = item.lab || 'N/A';
-            row.insertCell().textContent = item.dayTime || 'N/A';
+            // Fix Day & Time column to use day, startTime, endTime if available
+            let dayTimeDisplay = 'N/A';
+            if (item.day && item.startTime && item.endTime) {
+                dayTimeDisplay = `${item.day}, ${item.startTime} - ${item.endTime}`;
+            } else if (item.dayTime) {
+                dayTimeDisplay = item.dayTime;
+            }
+            row.insertCell().textContent = dayTimeDisplay;
             row.insertCell().textContent = item.room || 'N/A';
             row.insertCell().textContent = item.faculty || 'N/A';
         });
@@ -936,6 +943,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Only show years that are both in validYears and in the grades data
         let years = validYears.filter(y => allAcademicYears.includes(y));
         years.sort((a, b) => b.localeCompare(a)); // Most recent first
+
+        // If no years found, add a default (e.g., current year)
+        if (years.length === 0) {
+            const now = new Date();
+            const y1 = now.getFullYear();
+            const y2 = y1 + 1;
+            years = [`${y1}-${y2}`];
+        }
+
         // Optionally, label as 1st, 2nd, 3rd, 4th year
         const yearLabels = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
         // Populate year dropdown
@@ -964,14 +980,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Populate semester dropdown
         if (semSelect) {
             semSelect.innerHTML = '';
+            if (sems.length === 0) {
+                // Add default semesters if none found
+                ['First Semester', 'Second Semester'].forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    semSelect.appendChild(opt);
+                });
+            } else {
             sems.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s;
                 opt.textContent = s;
                 semSelect.appendChild(opt);
             });
+            }
             // Default to first semester if not set
-            if (sems.length > 0) semSelect.value = sems[0];
+            semSelect.value = semSelect.options[0]?.value || '';
         }
         // Add event listeners to dropdowns to reload grades on change
         if (yearSelect && semSelect && !yearSelect._listenerAdded) {
@@ -988,15 +1014,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             if (selectedYear && selectedSem) {
                 const apiUrl = `/api/student/grades/${student.id}/released?semester=${encodeURIComponent(selectedSem)}&academicYear=${encodeURIComponent(selectedYear)}`;
+                console.log('Fetching released grades from:', apiUrl);
                 releasedGradesResponse = await fetch(apiUrl);
+                console.log('Released grades response status:', releasedGradesResponse.status);
                 if (releasedGradesResponse.ok) {
                     releasedGradesRaw = await releasedGradesResponse.clone().json();
                     grades = releasedGradesRaw;
+                    console.log('Released grades received:', grades);
                 } else {
                     releasedGradesRaw = await releasedGradesResponse.text();
+                    console.error('Failed to fetch released grades:', releasedGradesRaw);
                 }
             }
         } catch (e) {
+            console.error('Error fetching released grades:', e);
             showNotification('Failed to fetch released grades. Please try again later.', 'error');
             if (gradesLoading) gradesLoading.style.display = 'none';
             return;
@@ -1063,62 +1094,98 @@ document.addEventListener('DOMContentLoaded', async () => {
             cell.style.textAlign = 'center';
             cell.style.padding = '20px';
             cell.style.color = 'var(--text-muted)';
-            // Do NOT show raw response debug info
+            
+            // Show additional info about pending grades
+            if (selectedYear && selectedSem) {
+                try {
+                    const allGradesResponse = await fetch(`/api/student/grades/${student.id}/term?semester=${encodeURIComponent(selectedSem)}&academicYear=${encodeURIComponent(selectedYear)}`);
+                    if (allGradesResponse.ok) {
+                        const allGrades = await allGradesResponse.json();
+                        const unreleasedGrades = allGrades.filter(g => !g.isReleased);
+                        if (unreleasedGrades.length > 0) {
+                            const infoRow = tableBody.insertRow();
+                            const infoCell = infoRow.insertCell();
+                            infoCell.colSpan = 8;
+                            infoCell.innerHTML = `<div style='background-color:#fff3cd;border:1px solid #ffeaa7;border-radius:4px;padding:10px;margin-top:10px;'><span style='color:#856404;'><strong>Note:</strong> You have ${unreleasedGrades.length} grade(s) that have been encoded but not yet released by your instructor(s). These will appear here once they are released.</span></div>`;
+                            infoCell.style.textAlign = 'center';
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to check for unreleased grades:', e);
+                }
+            }
+            
             if (gradesLoading) gradesLoading.style.display = 'none';
             return;
         }
-        grades.forEach((grade, index) => {
-            const row = tableBody.insertRow();
-            row.insertCell().textContent = index + 1;
-            row.insertCell().textContent = grade.subjectCode || 'N/A';
-            row.insertCell().textContent = grade.subjectName || 'N/A';
-            row.insertCell().textContent = grade.units || 'N/A';
-            const gradeCell = row.insertCell();
-            gradeCell.textContent = grade.grade || 'N/A';
-            if (grade.grade) {
-                gradeCell.style.color = '#28a745';
-            }
-            const numericCell = row.insertCell();
-            if (grade.numericGrade !== null && grade.numericGrade !== undefined) {
-                numericCell.textContent = Number(grade.numericGrade).toFixed(2);
-                numericCell.style.color = '#28a745';
-            } else {
-                numericCell.textContent = 'N/A';
-                numericCell.style.color = '#666';
-            }
-            const gpaCell = row.insertCell();
-            if (grade.gpa !== null && grade.gpa !== undefined) {
-                gpaCell.textContent = Number(grade.gpa).toFixed(2);
-                gpaCell.style.color = '#28a745';
-            } else {
-                gpaCell.textContent = 'N/A';
-                gpaCell.style.color = '#666';
-            }
-            const remarksCell = row.insertCell();
-            if (grade.grade === 'INC') {
-                remarksCell.textContent = 'Incomplete';
-                remarksCell.style.color = '#ffc107';
-            } else if (grade.grade === 'OD') {
-                remarksCell.textContent = 'Officially Dropped';
-                remarksCell.style.color = '#dc3545';
-            } else if (grade.grade === 'UD') {
-                remarksCell.textContent = 'Unofficially Dropped';
-                remarksCell.style.color = '#dc3545';
-            } else if (grade.grade === 'NGY') {
-                remarksCell.textContent = 'No Grade Yet';
-                remarksCell.style.color = '#6c757d';
-            } else if (grade.numericGrade !== null && grade.numericGrade !== undefined && grade.numericGrade <= 3.0) {
-                remarksCell.textContent = 'Passed';
-                remarksCell.style.color = '#28a745';
-            } else if (grade.numericGrade !== null && grade.numericGrade !== undefined && grade.numericGrade > 3.0) {
-                remarksCell.textContent = 'Failed';
-                remarksCell.style.color = '#dc3545';
-            } else {
-                remarksCell.textContent = 'N/A';
-                remarksCell.style.color = '#666';
-            }
-        });
+        // Before rendering the grades table, fetch all subjects for lookup
+        let allSubjects = [];
+        try {
+            const subjRes = await fetch('/api/auth/subjects');
+            if (subjRes.ok) allSubjects = await subjRes.json();
+        } catch {}
+        const { rows: gpaRows, overallGpa } = calculateGPA(grades, allSubjects);
+        // After fetching allSubjects and calculating GPA, render the grades table with improved UI
+        const gradesSection = document.getElementById('gradesSectionWrapper') || document.getElementById('gradesSection');
+        if (gradesSection) {
+            let tableHtml = `<div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:1.05em;box-shadow:0 2px 8px #e0e0e0;">
+                <thead>
+                    <tr style="background:#f8f9fa;">
+                        <th style="padding:10px 8px;">#</th>
+                        <th style="padding:10px 8px;">Subject Code</th>
+                        <th style="padding:10px 8px;">Subject Name</th>
+                        <th style="padding:10px 8px;">Units</th>
+                        <th style="padding:10px 8px;">Letter Grade</th>
+                        <th style="padding:10px 8px;">Numeric Grade</th>
+                        <th style="padding:10px 8px;">GPA</th>
+                        <th style="padding:10px 8px;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            gpaRows.forEach((grade, index) => {
+                const gpaColor = grade.gpa && Number(grade.gpa) <= 3.0 ? '#28a745' : (grade.gpa ? '#dc3545' : '#666');
+                tableHtml += `<tr style="background:${index%2===0?'#fff':'#f6f6fa'};">
+                    <td style="padding:8px 6px;">${index + 1}</td>
+                    <td style="padding:8px 6px;">${grade.subjectCode || ''}</td>
+                    <td style="padding:8px 6px;">${grade.subjectName && grade.subjectName !== 'N/A' ? grade.subjectName : (allSubjects.find(s => s.code === grade.subjectCode)?.name || '')}</td>
+                    <td style="padding:8px 6px;text-align:center;">${grade.units || ''}</td>
+                    <td style="padding:8px 6px;text-align:center;">${grade.grade || ''}</td>
+                    <td style="padding:8px 6px;text-align:center;">${grade.numericGrade !== null && grade.numericGrade !== undefined ? Number(grade.numericGrade).toFixed(2) : ''}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${gpaColor};font-weight:bold;">${grade.gpa}</td>
+                    <td style="padding:8px 6px;">${grade.remarks || ''}</td>
+                </tr>`;
+            });
+            tableHtml += `</tbody>
+                <tfoot>
+                    <tr style="background:#f1f3f4;font-weight:bold;">
+                        <td colspan="6" style="text-align:right;padding:10px 8px;">Overall GPA:</td>
+                        <td style="padding:10px 8px;text-align:center;color:${overallGpa && Number(overallGpa) <= 3.0 ? '#28a745' : (overallGpa ? '#dc3545' : '#666')};font-size:1.1em;">${overallGpa}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>`;
+            gradesSection.innerHTML = tableHtml;
+        }
         if (gradesLoading) gradesLoading.style.display = 'none';
+    }
+
+    function calculateGPA(grades, allSubjects) {
+        let totalGpa = 0, totalUnits = 0;
+        const rows = grades.map(g => {
+            let subject = allSubjects.find(s => s.code === g.subjectCode) || {};
+            const units = (g.units && g.units !== 'N/A') ? Number(g.units) : (subject.units || 0);
+            let gpa = '';
+            if (units && g.numericGrade !== null && g.numericGrade !== undefined && !isNaN(units) && !isNaN(Number(g.numericGrade))) {
+                gpa = (units * Number(g.numericGrade)).toFixed(2);
+                totalGpa += units * Number(g.numericGrade);
+                totalUnits += units;
+            }
+            return { ...g, units, gpa };
+        });
+        const overallGpa = (totalUnits > 0) ? (totalGpa / totalUnits).toFixed(2) : '';
+        return { rows, overallGpa };
     }
 
     async function loadFormsData(studentId) {

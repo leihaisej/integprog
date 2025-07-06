@@ -112,7 +112,16 @@
             <!-- Manage Students Section -->
             <section id="manageStudents" class="content-section">
                 <h2>Manage Students</h2>
-                <button id="openAddStudentModal" class="btn btn-success">Add New Student</button>
+                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 16px;">
+                    <label for="studentCourseFilter" style="font-weight: 500;">Filter by Course:</label>
+                    <select id="studentCourseFilter" style="min-width: 200px;">
+                        <option value="">-- All Courses --</option>
+                    </select>
+                    <button id="openAddStudentModal" class="btn btn-success">Add New Student</button>
+                </div>
+                <div class="search-container" style="margin-bottom: 12px;">
+                    <input type="text" id="studentSearchInput" class="search-input" placeholder="Search by name, ID, course, or section..." style="width: 320px; max-width: 100%;">
+                </div>
                 <table id="studentsTable">
                     <thead>
                         <tr>
@@ -171,6 +180,9 @@
             <section id="manageSubjects" class="content-section">
                 <h2>Manage Subjects</h2>
                 <button id="openAddSubjectModal" class="btn btn-success">Add New Subject</button>
+                <div class="search-container" style="margin-bottom: 12px;">
+                    <input type="text" id="subjectSearchInput" class="search-input" placeholder="Search by code, name, course, or description..." style="width: 320px; max-width: 100%;">
+                </div>
                 <table id="subjectsTable">
                     <thead><tr><th>Code</th><th>Name</th><th>Units</th><th>Course Code</th><th>Description</th><th>Actions</th></tr></thead>
                     <tbody></tbody>
@@ -180,8 +192,14 @@
             <!-- Manage Sections Section -->
             <section id="manageSections" class="content-section">
                 <h2>Manage Sections</h2>
-                 <button id="openAddSectionModal" class="btn btn-success">Add New Section</button>
-                 <!-- Future: Add button to "Manage Section Schedules" which opens a new, more complex modal/view -->
+                <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 16px;">
+                    <label for="sectionCourseFilter" style="font-weight: 500;">Filter by Course:</label>
+                    <select id="sectionCourseFilter" style="min-width: 200px;">
+                        <option value="">-- All Courses --</option>
+                    </select>
+                    <button id="openAddSectionModal" class="btn btn-success">Add New Section</button>
+                </div>
+                <!-- Future: Add button to "Manage Section Schedules" which opens a new, more complex modal/view -->
                 <table id="sectionsTable">
                     <thead><tr><th>ID</th><th>Name</th><th>Course Code</th><th>Year Level</th><th>Section Letter</th><th>Enrollment</th><th>Actions</th></tr></thead>
                     <tbody></tbody>
@@ -191,94 +209,164 @@
             <!-- Manage Schedules Section -->
             <section id="manageSchedules" class="content-section">
                 <h2>Manage Student Schedules</h2>
-                <div class="schedule-controls" style="margin-bottom: 20px;">
-                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
-                        <label for="scheduleStudentSelect">Select Student:</label>
-                        <select id="scheduleStudentSelect" style="width: 200px;"></select>
-                    </div>
-                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
-                        <label for="scheduleAcademicYear">Academic Year:</label>
-                        <select id="scheduleAcademicYear" style="width: 120px;">
-                            <option value="">All Years</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display: inline-block; margin-right: 15px;">
-                        <label for="scheduleSemester">Semester:</label>
-                        <select id="scheduleSemester" style="width: 120px;">
-                            <option value="">All Semesters</option>
-                        </select>
-                    </div>
-                    <button id="openAddScheduleModal" class="btn btn-success">Add Schedule Item</button>
+                <!-- Loading and Error States -->
+                <div class="schedule-loading" style="display: none; text-align: center; padding: 20px;">
+                    <div>Loading...</div>
                 </div>
-                <table id="schedulesTable" class="schedule-table-styled">
-                    <thead>
-                        <tr>
-                            <th>Subject Code</th>
-                            <th>Description</th>
-                            <th>Units</th>
-                            <th>Lec</th>
-                            <th>Lab</th>
-                            <th>Day & Time</th>
-                            <th>Room</th>
-                            <th>Faculty</th>
-                            <th>Academic Year</th>
-                            <th>Semester</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
+                <div class="schedule-error" style="display: none; color: #dc3545; background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; border-radius: 4px;"></div>
+                <div class="schedule-steps">
+                    <!-- Course Filter -->
+                    <div class="step-card" id="step0-course-filter" style="margin-bottom: 16px;">
+                        <label for="scheduleCourseFilter" style="font-weight: 500;">Filter by Course:</label>
+                        <select id="scheduleCourseFilter" class="step-select" style="min-width: 200px;"></select>
+                    </div>
+                    <!-- Step 1: Actions -->
+                    <div class="step-card" id="step1-actions">
+                        <div class="step-header"><span class="step-number">1</span> Actions</div>
+                        <button id="openBulkScheduleModal" class="btn btn-info step-action-btn">Assign Section Schedule</button>
+                        <button id="viewAllSchedulesBtn" class="btn btn-success step-action-btn">View All Schedules</button>
+                        <div class="step-message" id="actionsStepMsg">Choose an action to continue.</div>
+                    </div>
+                    <!-- Step 2: Select Section (hidden initially) -->
+                    <div class="step-card" id="step2-section" style="display:none;">
+                        <div class="step-header"><span class="step-number">2</span> Select Section</div>
+                        <select id="scheduleSectionSelect" class="step-select"></select>
+                        <div class="step-message" id="sectionStepMsg">Please select a section to begin.</div>
+                    </div>
+                    <!-- Step 3: Select Student (hidden initially) -->
+                    <div class="step-card" id="step3-student" style="display:none;">
+                        <div class="step-header"><span class="step-number">3</span> Select Student</div>
+                        <select id="scheduleStudentSelect" class="step-select" disabled></select>
+                        <div class="step-message" id="studentStepMsg">Please select a student to view or manage schedules.</div>
+                    </div>
+                    <!-- Step 4: Filter by Academic Year & Semester (hidden initially) -->
+                    <div class="step-card" id="step4-filter" style="display:none;">
+                        <div class="step-header"><span class="step-number">4</span> Filter by Academic Year & Semester</div>
+                        <div class="filter-row">
+                            <select id="scheduleAcademicYear" class="step-select" disabled></select>
+                            <select id="scheduleSemester" class="step-select" disabled></select>
+                        </div>
+                        <div class="step-message" id="filterStepMsg">No academic years/semesters found for this student.</div>
+                    </div>
+                </div>
+                <!-- Schedules Table (hidden initially) -->
+                <div class="step-card" id="step5-table" style="margin-top: 24px; display:none;">
+                    <div class="step-header"><span class="step-number">5</span> Student Schedules</div>
+                    <table id="schedulesTable" class="schedule-table-styled">
+                        <thead>
+                            <tr>
+                                <th>SUBJECT CODE</th>
+                                <th>DESCRIPTION</th>
+                                <th>UNITS</th>
+                                <th>LEC</th>
+                                <th>LAB</th>
+                                <th>DAY & TIME</th>
+                                <th>ROOM</th>
+                                <th>FACULTY</th>
+                                <th>ACADEMIC YEAR</th>
+                                <th>SEMESTER</th>
+                                <th>ACTIONS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="11" class="step-message" id="tableStepMsg">No schedules assigned to this student.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <!-- Encode Grades Section -->
             <section id="encodeGrades" class="content-section">
                 <h2>Encode Grades</h2>
-                <div class="alert alert-info" style="margin-bottom: 20px; padding: 10px; background-color: #e3f2fd; border: 1px solid #2196F3; border-radius: 4px;">
-                    <strong>Note:</strong> You can encode grades for any subject, regardless of the student's enrollment status. 
-                    This allows for grade corrections and late submissions.
+                
+                <!-- Step-by-step selection -->
+                <div class="grade-selection-container" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #495057;">Step 1: Select Course</h4>
+                    <div class="form-group">
+                        <select id="gradeCourseSelect" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <option value="">-- Select Course --</option>
+                        </select>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px; color: #495057;">Step 2: Select Section</h4>
+                    <div class="form-group">
+                        <select id="gradeSectionSelect" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;" disabled>
+                            <option value="">-- Select Section --</option>
+                        </select>
+                    </div>
+
+                    <h4 style="margin-top: 20px; color: #495057;">Step 3: Select Year Level</h4>
+                    <div class="form-group">
+                        <select id="gradeYearLevelSelect" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;" disabled>
+                            <option value="">-- Select Year Level --</option>
+                        </select>
+                    </div>
+
+                    <h4 style="margin-top: 20px; color: #495057;">Step 4: Select Semester</h4>
+                    <div class="form-group">
+                        <select id="gradeSemesterSelect" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;" disabled>
+                            <option value="">-- Select Semester --</option>
+                        </select>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px; color: #495057;">Step 5: Select Subject (from curriculum)</h4>
+                    <div class="form-group">
+                        <select id="gradeSubjectSelect" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ced4da; border-radius: 4px;" disabled>
+                            <option value="">-- Select Subject --</option>
+                        </select>
+                    </div>
                 </div>
-                <form id="encodeGradesForm">
-                    <div class="form-group">
-                        <label for="gradeStudentSelect">Select Student:</label>
-                        <select id="gradeStudentSelect" required></select>
+
+                <!-- Grade Entry Table -->
+                <div id="gradeEntrySection" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4 style="margin: 0; color: #495057;">Grade Entry</h4>
+                        <div>
+                            <button id="saveAllGradesBtn" class="btn btn-primary" style="margin-right: 10px;">Save All Grades</button>
+                            <button id="releaseAllGradesBtn" class="btn btn-success" style="margin-right: 10px;">Release All</button>
+                            <button id="unreleaseAllGradesBtn" class="btn btn-warning">Unrelease All</button>
+                        </div>
                     </div>
-                     <div class="form-group">
-                        <label for="gradeTermSelect">Select Term (SY - Semester):</label>
-                        <select id="gradeTermSelect" required>
-                            <option value="">-- Select Term --</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="gradeSubjectSelectEncode">Select Subject (from student's schedule for selected term):</label>
-                        <select id="gradeSubjectSelectEncode" required></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="finalGradeInput">Final Grade (Numeric, e.g., 1.00-5.00 or 0-100):</label>
-                        <input type="number" id="finalGradeInput" step="0.01" placeholder="Enter numeric grade">
-                    </div>
-                     <div class="form-group">
-                        <label for="gradeRemarksSelect">Remarks:</label>
-                        <select id="gradeRemarksSelect">
-                            <option value="In Progress">In Progress</option>
-                            <option value="Passed">Passed</option>
-                            <option value="Failed">Failed</option>
-                            <option value="Incomplete">Incomplete (INC)</option>
-                            <option value="Officially Dropped">Officially Dropped (OD)</option>
-                            <option value="Unofficially Dropped">Unofficially Dropped (UD)</option>
-                            <option value="No Grade Yet">No Grade Yet (NGY)</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Grade</button>
-                </form>
-                 <div id="studentGradesDisplay" class="mt-3">
-                    <h4>Current Grades for Selected Term:</h4>
-                    <div id="termGPADisplay" style="margin-bottom: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
-                        <strong>Term GPA: N/A</strong>
-                    </div>
-                    <table id="currentGradesTable">
-                        <thead><tr><th>Subject Code</th><th>Subject Name</th><th>Units</th><th>Grade</th><th>Numeric Grade</th><th>GPA</th><th>Actions</th></tr></thead>
-                        <tbody></tbody>
+                    
+                    <table id="gradeEntryTable" style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                        <thead>
+                            <tr style="background: #e91e63; color: white;">
+                                <th style="padding: 12px; text-align: left; border: none;">Student ID</th>
+                                <th style="padding: 12px; text-align: left; border: none;">Name</th>
+                                <th style="padding: 12px; text-align: left; border: none;">Grade</th>
+                                <th style="padding: 12px; text-align: left; border: none;">Remarks</th>
+                                <th style="padding: 12px; text-align: left; border: none;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gradeEntryTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
                     </table>
+                    
+                    <!-- Grade Statistics -->
+                    <div id="gradeStatistics" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">
+                        <h5 style="margin-top: 0; color: #1976D2;">Grade Statistics</h5>
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                            <div><strong>Total Students:</strong> <span id="statTotalStudents">0</span></div>
+                            <div><strong>Encoded Grades:</strong> <span id="statEncodedGrades">0</span></div>
+                            <div><strong>Released Grades:</strong> <span id="statReleasedGrades">0</span></div>
+                            <div><strong>Average Grade:</strong> <span id="statAverageGrade">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">
+                    <h5 style="margin-top: 0; color: #856404;">Instructions</h5>
+                    <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                        <li>Select a course first to load available sections</li>
+                        <li>Choose a section to see enrolled students</li>
+                        <li>Select year level and semester to load the correct curriculum</li>
+                        <li>Select a subject from the curriculum for that year/semester</li>
+                        <li>Choose the term to encode grades for</li>
+                        <li>Enter grades using numeric format (1.00-5.00 or 0-100)</li>
+                        <li>Use "Save All Grades" to submit all entries at once</li>
+                    </ul>
                 </div>
             </section>
 
@@ -297,6 +385,7 @@
                             <th>Remaining Balance</th>
                             <th>Academic Year</th>
                             <th>Semester</th>
+                            <th>Schedule</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -645,30 +734,12 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="scheduleTimeModal">Start Time:</label>
-                        <select id="scheduleTimeModal" required>
-                            <option value="">-- Select Start Time --</option>
-                            <option value="7:00">7:00</option>
-                            <option value="8:00">8:00</option>
-                            <option value="9:00">9:00</option>
-                            <option value="10:00">10:00</option>
-                            <option value="11:00">11:00</option>
-                            <option value="12:00">12:00</option>
-                            <option value="13:00">1:00 PM</option>
-                            <option value="14:00">2:00 PM</option>
-                            <option value="15:00">3:00 PM</option>
-                            <option value="16:00">4:00 PM</option>
-                            <option value="17:00">5:00 PM</option>
-                            <option value="18:00">6:00 PM</option>
-                        </select>
+                        <label for="scheduleStartTimeModal">Start Time:</label>
+                        <input type="time" id="scheduleStartTimeModal" required>
                     </div>
                     <div class="form-group">
                         <label for="scheduleEndTimeModal">End Time:</label>
-                        <input type="time" id="scheduleEndTimeModal" required readonly placeholder="Will be auto-calculated" style="background-color: #f5f5f5; color: #888;">
-                    </div>
-                    <div class="form-group">
-                        <label for="scheduleTimeRangeModal">Time Range:</label>
-                        <input type="text" id="scheduleTimeRangeModal" readonly placeholder="Will be auto-calculated" style="background-color: #f5f5f5; color: #888;">
+                        <input type="time" id="scheduleEndTimeModal" required>
                     </div>
                     <div class="form-group">
                         <label for="scheduleRoomModal">Room:</label>
@@ -857,6 +928,100 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="cancelCurriculumForm">Cancel</button>
                 <button type="submit" class="btn btn-primary" form="curriculumForm">Save Curriculum</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Schedule Modal -->
+    <div id="bulkScheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Assign Section Schedule</h3>
+                <button class="close-button" id="closeBulkScheduleModal">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="bulkScheduleForm">
+                    <div class="form-group">
+                        <label for="bulkSectionSelect">Section:</label>
+                        <select id="bulkSectionSelect">
+                            <option value="">-- All Sections --</option>
+                        </select>
+                        <small>Select a specific section or leave as "All Sections" to assign to all sections of the course</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkSubjectSelect">Subject Code:</label>
+                        <select id="bulkSubjectSelect" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkDescriptionModal">Description:</label>
+                        <input type="text" id="bulkDescriptionModal" required readonly style="background-color: #f5f5f5; color: #888;">
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkUnitsModal">Units:</label>
+                        <input type="number" id="bulkUnitsModal" readonly style="background-color: #f5f5f5; color: #888;">
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkLecModal">Lecture Hours:</label>
+                        <input type="number" id="bulkLecModal" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkLabModal">Laboratory Hours:</label>
+                        <input type="number" id="bulkLabModal" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleDay">Day:</label>
+                        <select id="bulkScheduleDay" required>
+                            <option value="">-- Select Day --</option>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleStartTime">Start Time:</label>
+                        <input type="time" id="bulkScheduleStartTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleEndTime">End Time:</label>
+                        <input type="time" id="bulkScheduleEndTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleRoom">Room:</label>
+                        <input type="text" id="bulkScheduleRoom" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleFaculty">Faculty:</label>
+                        <select id="bulkScheduleFaculty" required>
+                            <option value="">-- Select Faculty --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleAcademicYear">Academic Year:</label>
+                        <select id="bulkScheduleAcademicYear" required>
+                            <option value="">-- Select Academic Year --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bulkScheduleSemester">Semester:</label>
+                        <select id="bulkScheduleSemester" required>
+                            <option value="">-- Select Semester --</option>
+                            <option value="First Semester">First Semester</option>
+                            <option value="Second Semester">Second Semester</option>
+                            <option value="Summer">Summer</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <span id="bulkScheduleErrorMsg" style="color: #e91e63;"></span>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-info">Assign Schedule</button>
+                        <button type="button" class="btn btn-danger" id="cancelBulkScheduleForm">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

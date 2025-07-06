@@ -61,9 +61,9 @@ public class InMemoryDataStore {
         courses.add(new Course("BFA", "Bachelor of Fine Arts"));
 
         // Subjects (example)
-        subjects.add(new Subject("CS101", "Intro to Programming", 3, "BSIT", "Fundamental programming concepts."));
-        subjects.add(new Subject("IT201", "Web Development", 3, "BSIT", "Client-side and server-side web development."));
-        subjects.add(new Subject("GENMATH", "General Mathematics", 3, null, "Basic college mathematics."));
+        subjects.add(new Subject("CS101", "Intro to Programming", 3, "BSIT", "Fundamental programming concepts.", 3, 0));
+        subjects.add(new Subject("IT201", "Web Development", 3, "BSIT", "Client-side and server-side web development.", 2, 1));
+        subjects.add(new Subject("GENMATH", "General Mathematics", 3, null, "Basic college mathematics.", 3, 0));
 
         // Faculty (example)
         faculty.add(new Faculty("F-001", "Dr. John Smith", "Computer Science", "+63 912 345 6789", "john.smith@university.edu", "Professor", List.of("CS101", "CS201")));

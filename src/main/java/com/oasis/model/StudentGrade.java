@@ -45,6 +45,9 @@ public class StudentGrade {
     @Column(name = "is_released", columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isReleased = false; // Whether the grade is released to student
 
+    @Column(name = "remarks", length = 100)
+    private String remarks;
+
     // Constructors
     public StudentGrade() {}
 
@@ -166,5 +169,13 @@ public class StudentGrade {
 
     public void setIsReleased(Boolean isReleased) {
         this.isReleased = isReleased;
+    }
+
+    public String getRemarks() {
+        return remarks;
+    }
+
+    public void setRemarks(String remarks) {
+        this.remarks = remarks;
     }
 }

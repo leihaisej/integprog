@@ -1,4 +1,816 @@
-﻿function setupModal(modalId, openButtonId, closeButtonId, formId, onSubmit, onOpen, cancelButtonId) {
+﻿// Central state management for Manage Schedules (must be at the top for initialization order)
+window.manageSchedulesState = {
+    currentStep: 1,
+    selectedCourse: null,
+    selectedSection: null,
+    selectedStudent: null,
+    selectedAcademicYear: null,
+    selectedSemester: null,
+    schedules: [],
+    isLoading: false,
+    error: null,
+    cache: {
+        courses: null,
+        sections: {},
+        students: {},
+        schedules: {}
+    }
+};
+
+// State management functions
+function updateManageSchedulesState(newState) {
+    Object.assign(manageSchedulesState, newState);
+    updateUIFromState();
+}
+
+function resetManageSchedulesState() {
+    Object.assign(manageSchedulesState, {
+        currentStep: 1,
+        selectedCourse: null,
+        selectedSection: null,
+        selectedStudent: null,
+        selectedAcademicYear: null,
+        selectedSemester: null,
+        schedules: [],
+        isLoading: false,
+        error: null,
+        cache: {
+            courses: null,
+            sections: {},
+            students: {},
+            schedules: {}
+        }
+    });
+    updateUIFromState();
+}
+
+function updateUIFromState() {
+    const { currentStep, selectedCourse, selectedSection, selectedStudent, isLoading, error } = manageSchedulesState;
+    
+    // Update step visibility
+    showStep(currentStep);
+    
+    // Update dropdowns
+    updateDropdownSelections();
+    
+    // Update button states
+    updateButtonStates();
+    
+    // Show/hide loading and error states
+    showLoadingState(isLoading);
+    showErrorState(error);
+}
+
+// UI Control Functions
+function showStep(stepNumber) {
+    const steps = ['step0-course-filter', 'step1-actions', 'step2-section', 'step3-student', 'step4-filter', 'step5-table'];
+    steps.forEach((stepId, index) => {
+        const element = document.getElementById(stepId);
+        if (element) {
+            if (index === 0) {
+                // Course filter is always visible
+                element.style.display = '';
+            } else if (index === 1) {
+                // Actions step is visible when step 1 is active
+                element.style.display = stepNumber === 1 ? '' : 'none';
+            } else {
+                // Other steps are visible when current step >= their index
+                element.style.display = stepNumber >= index ? '' : 'none';
+            }
+        }
+    });
+}
+
+function updateDropdownSelections() {
+    const { selectedCourse, selectedSection, selectedStudent, selectedAcademicYear, selectedSemester } = manageSchedulesState;
+    
+    // Update course filter
+    const courseFilter = document.getElementById('scheduleCourseFilter');
+    if (courseFilter && selectedCourse !== courseFilter.value) {
+        courseFilter.value = selectedCourse || '';
+    }
+    
+    // Update section dropdown
+    const sectionSelect = document.getElementById('scheduleSectionSelect');
+    if (sectionSelect && selectedSection !== sectionSelect.value) {
+        sectionSelect.value = selectedSection || '';
+    }
+    
+    // Update student dropdown
+    const studentSelect = document.getElementById('scheduleStudentSelect');
+    if (studentSelect && selectedStudent !== studentSelect.value) {
+        studentSelect.value = selectedStudent || '';
+    }
+    
+    // Update academic year dropdown
+    const yearSelect = document.getElementById('scheduleAcademicYear');
+    if (yearSelect && selectedAcademicYear !== yearSelect.value) {
+        yearSelect.value = selectedAcademicYear || '';
+    }
+    
+    // Update semester dropdown
+    const semesterSelect = document.getElementById('scheduleSemester');
+    if (semesterSelect && selectedSemester !== semesterSelect.value) {
+        semesterSelect.value = selectedSemester || '';
+    }
+}
+
+function updateButtonStates() {
+    const { selectedCourse } = manageSchedulesState;
+    const bulkBtn = document.getElementById('openBulkScheduleModal');
+    
+    if (bulkBtn) {
+        bulkBtn.disabled = !selectedCourse;
+    }
+}
+
+function showLoadingState(isLoading) {
+    const loadingElements = document.querySelectorAll('.schedule-loading');
+    loadingElements.forEach(el => {
+        el.style.display = isLoading ? 'block' : 'none';
+    });
+}
+
+function showErrorState(error) {
+    const errorElements = document.querySelectorAll('.schedule-error');
+    errorElements.forEach(el => {
+        if (error) {
+            el.textContent = error;
+            el.style.display = 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+}
+
+// Data Loading Functions with Caching and Error Handling
+async function loadCourses() {
+    if (manageSchedulesState.cache.courses) {
+        return manageSchedulesState.cache.courses;
+    }
+    
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch('/api/auth/courses');
+        if (!response.ok) throw new Error('Failed to load courses');
+        
+        const courses = await response.json();
+        manageSchedulesState.cache.courses = courses;
+        return courses;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Error loading courses: ${error.message}` });
+        return [];
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function loadSectionsForCourse(courseCode) {
+    const cacheKey = courseCode || 'all';
+    if (manageSchedulesState.cache.sections[cacheKey]) {
+        return manageSchedulesState.cache.sections[cacheKey];
+    }
+    
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const url = courseCode ? `/api/auth/sections?courseCode=${encodeURIComponent(courseCode)}` : '/api/auth/sections';
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load sections');
+        
+        const sections = await response.json();
+        manageSchedulesState.cache.sections[cacheKey] = sections;
+        return sections;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Error loading sections: ${error.message}` });
+        return [];
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function loadStudentsForSection(sectionId) {
+    const cacheKey = sectionId;
+    if (manageSchedulesState.cache.students[cacheKey]) {
+        return manageSchedulesState.cache.students[cacheKey];
+    }
+    
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch(`/api/auth/enrollments/section/${encodeURIComponent(sectionId)}`);
+        if (!response.ok) throw new Error('Failed to load students');
+        
+        const students = await response.json();
+        manageSchedulesState.cache.students[cacheKey] = students;
+        return students;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Error loading students: ${error.message}` });
+        return [];
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function loadSchedulesForStudent(studentId, filters = {}) {
+    const cacheKey = `${studentId}-${JSON.stringify(filters)}`;
+    if (manageSchedulesState.cache.schedules[cacheKey]) {
+        return manageSchedulesState.cache.schedules[cacheKey];
+    }
+    
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        let url = `/api/auth/schedules/${studentId}`;
+        const params = new URLSearchParams();
+        if (filters.academicYear) params.append('academicYear', filters.academicYear);
+        if (filters.semester) params.append('semester', filters.semester);
+        if (params.toString()) url += `?${params.toString()}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to load schedules');
+        
+        const schedules = await response.json();
+        manageSchedulesState.cache.schedules[cacheKey] = schedules;
+        return schedules;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Error loading schedules: ${error.message}` });
+        return [];
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+// Dropdown Population Functions
+async function populateCourseDropdown() {
+    const courseFilter = document.getElementById('scheduleCourseFilter');
+    if (!courseFilter) return;
+    
+    const courses = await loadCourses();
+    courseFilter.innerHTML = '<option value="">-- All Courses --</option>';
+    courses.forEach(course => {
+        const option = document.createElement('option');
+        option.value = course.code;
+        option.textContent = course.name;
+        courseFilter.appendChild(option);
+    });
+}
+
+async function populateSectionDropdown() {
+    const sectionSelect = document.getElementById('scheduleSectionSelect');
+    if (!sectionSelect) return;
+    
+    const sections = await loadSectionsForCourse(manageSchedulesState.selectedCourse);
+    sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+    sections.forEach(section => {
+        const option = document.createElement('option');
+        option.value = section.id;
+        option.textContent = `${section.name} (${section.id})`;
+        sectionSelect.appendChild(option);
+    });
+}
+
+async function populateStudentDropdown() {
+    const studentSelect = document.getElementById('scheduleStudentSelect');
+    if (!studentSelect) return;
+    
+    if (!manageSchedulesState.selectedSection) {
+        studentSelect.innerHTML = '<option value="">-- Select Section First --</option>';
+        studentSelect.disabled = true;
+        return;
+    }
+    
+    const students = await loadStudentsForSection(manageSchedulesState.selectedSection);
+    studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+    studentSelect.disabled = false;
+    
+    students.forEach(student => {
+        const option = document.createElement('option');
+        option.value = student.id;
+        option.textContent = `${student.name} (${student.id})`;
+        studentSelect.appendChild(option);
+    });
+}
+
+async function populateAcademicYearSemesterDropdowns() {
+    const yearSelect = document.getElementById('scheduleAcademicYear');
+    const semesterSelect = document.getElementById('scheduleSemester');
+    
+    if (!yearSelect || !semesterSelect) return;
+    
+    if (!manageSchedulesState.selectedStudent) {
+        yearSelect.innerHTML = '<option value="">-- Select Student First --</option>';
+        semesterSelect.innerHTML = '<option value="">-- Select Student First --</option>';
+        yearSelect.disabled = true;
+        semesterSelect.disabled = true;
+        return;
+    }
+    
+    const schedules = await loadSchedulesForStudent(manageSchedulesState.selectedStudent);
+    
+    // Extract unique academic years
+    const years = [...new Set(schedules.map(s => s.academicYear).filter(Boolean))].sort();
+    yearSelect.innerHTML = '<option value="">-- All Years --</option>';
+    years.forEach(year => {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    });
+    yearSelect.disabled = false;
+    
+    // Extract unique semesters
+    const semesters = [...new Set(schedules.map(s => s.semester).filter(Boolean))].sort();
+    semesterSelect.innerHTML = '<option value="">-- All Semesters --</option>';
+    semesters.forEach(semester => {
+        const option = document.createElement('option');
+        option.value = semester;
+        option.textContent = semester;
+        semesterSelect.appendChild(option);
+    });
+    semesterSelect.disabled = false;
+}
+
+// Table Rendering Functions
+function renderSchedulesTable(schedules) {
+    const tableBody = document.getElementById('schedulesTable')?.querySelector('tbody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    if (!schedules || schedules.length === 0) {
+        const row = tableBody.insertRow();
+        const cell = row.insertCell();
+        cell.colSpan = 11;
+        cell.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">No schedules found for the selected criteria.</div>';
+        return;
+    }
+    
+    schedules.forEach(schedule => {
+        const row = tableBody.insertRow();
+        
+        // Subject Code
+        row.insertCell().textContent = schedule.subjectCode || '';
+        
+        // Description
+        row.insertCell().textContent = schedule.description || '';
+        
+        // Units
+        row.insertCell().textContent = schedule.units || '';
+        
+        // Lecture Hours
+        row.insertCell().textContent = schedule.lec || '';
+        
+        // Laboratory Hours
+        row.insertCell().textContent = schedule.lab || '';
+        
+        // Day & Time
+        const dayTimeCell = row.insertCell();
+        if (schedule.day && schedule.startTime && schedule.endTime) {
+            dayTimeCell.textContent = `${schedule.day}, ${schedule.startTime} - ${schedule.endTime}`;
+        } else if (schedule.dayTime) {
+            dayTimeCell.textContent = schedule.dayTime;
+        } else {
+            dayTimeCell.textContent = '';
+        }
+        
+        // Room
+        row.insertCell().textContent = schedule.room || '';
+        
+        // Faculty
+        row.insertCell().textContent = schedule.faculty || '';
+        
+        // Academic Year
+        row.insertCell().textContent = schedule.academicYear || '';
+        
+        // Semester
+        row.insertCell().textContent = schedule.semester || '';
+        
+        // Actions
+        const actionsCell = row.insertCell();
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.className = 'btn btn-sm btn-edit';
+        editBtn.onclick = () => openEditScheduleModal(schedule);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.className = 'btn btn-sm btn-danger';
+        deleteBtn.onclick = () => deleteSchedule(schedule.id);
+        
+        actionsCell.appendChild(editBtn);
+        actionsCell.appendChild(deleteBtn);
+    });
+}
+
+// CRUD Operations
+async function createSchedule(scheduleData) {
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch('/api/auth/schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scheduleData)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+        
+        // Clear cache for this student
+        const cacheKey = `${scheduleData.studentId}-*`;
+        Object.keys(manageSchedulesState.cache.schedules).forEach(key => {
+            if (key.startsWith(scheduleData.studentId)) {
+                delete manageSchedulesState.cache.schedules[key];
+            }
+        });
+        
+        await refreshSchedulesTable();
+        showNotification('Schedule created successfully!', 'success');
+        return true;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Failed to create schedule: ${error.message}` });
+        showNotification(`Failed to create schedule: ${error.message}`, 'error');
+        return false;
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function updateSchedule(scheduleId, scheduleData) {
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch(`/api/auth/schedules/${scheduleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scheduleData)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+        
+        // Clear cache for this student
+        const cacheKey = `${scheduleData.studentId}-*`;
+        Object.keys(manageSchedulesState.cache.schedules).forEach(key => {
+            if (key.startsWith(scheduleData.studentId)) {
+                delete manageSchedulesState.cache.schedules[key];
+            }
+        });
+        
+        await refreshSchedulesTable();
+        showNotification('Schedule updated successfully!', 'success');
+        return true;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Failed to update schedule: ${error.message}` });
+        showNotification(`Failed to update schedule: ${error.message}`, 'error');
+        return false;
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function deleteSchedule(scheduleId) {
+    if (!confirm('Are you sure you want to delete this schedule item?')) {
+        return false;
+    }
+    
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch(`/api/auth/schedules/${scheduleId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+        
+        // Clear cache for this student
+        Object.keys(manageSchedulesState.cache.schedules).forEach(key => {
+            if (key.startsWith(manageSchedulesState.selectedStudent)) {
+                delete manageSchedulesState.cache.schedules[key];
+            }
+        });
+        
+        await refreshSchedulesTable();
+        showNotification('Schedule deleted successfully!', 'success');
+        return true;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Failed to delete schedule: ${error.message}` });
+        showNotification(`Failed to delete schedule: ${error.message}`, 'error');
+        return false;
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+async function bulkAssignSchedules(sectionId, scheduleData) {
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch('/api/auth/schedules/section-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sectionId, scheduleDetails: scheduleData })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText);
+        }
+        
+        // Clear all caches since bulk operation affects multiple students
+        manageSchedulesState.cache.students = {};
+        manageSchedulesState.cache.schedules = {};
+        
+        await refreshSchedulesTable();
+        window.showNotification('Bulk schedule assignment completed successfully!', 'success');
+        return true;
+    } catch (error) {
+        updateManageSchedulesState({ error: `Failed to assign bulk schedules: ${error.message}` });
+        window.showNotification(`Failed to assign bulk schedules: ${error.message}`, 'error');
+        return false;
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+// Utility Functions
+async function refreshSchedulesTable() {
+    if (!manageSchedulesState.selectedStudent) return;
+    
+    const filters = {};
+    if (manageSchedulesState.selectedAcademicYear) filters.academicYear = manageSchedulesState.selectedAcademicYear;
+    if (manageSchedulesState.selectedSemester) filters.semester = manageSchedulesState.selectedSemester;
+    
+    const schedules = await loadSchedulesForStudent(manageSchedulesState.selectedStudent, filters);
+    updateManageSchedulesState({ schedules });
+    renderSchedulesTable(schedules);
+}
+
+// Load all schedules for the view all functionality
+async function loadAllSchedules() {
+    try {
+        updateManageSchedulesState({ isLoading: true, error: null });
+        const response = await fetch('/api/auth/schedules');
+        if (response.ok) {
+            const schedules = await response.json();
+            updateManageSchedulesState({ schedules });
+            renderSchedulesTable(schedules);
+        } else {
+            throw new Error('Failed to load schedules');
+        }
+    } catch (error) {
+        updateManageSchedulesState({ error: `Failed to load schedules: ${error.message}` });
+        window.showNotification('Failed to load schedules', 'error');
+    } finally {
+        updateManageSchedulesState({ isLoading: false });
+    }
+}
+
+// Debounced function for performance
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Event Handlers
+function setupManageSchedulesEventListeners() {
+    // Course filter change
+    const courseFilter = document.getElementById('scheduleCourseFilter');
+    if (courseFilter) {
+        courseFilter.addEventListener('change', async (e) => {
+            const selectedCourse = e.target.value;
+            updateManageSchedulesState({
+                selectedCourse,
+                selectedSection: null,
+                selectedStudent: null,
+                selectedAcademicYear: null,
+                selectedSemester: null,
+                schedules: []
+            });
+            await populateSectionDropdown();
+        });
+    }
+    
+    // Section selection change
+    const sectionSelect = document.getElementById('scheduleSectionSelect');
+    if (sectionSelect) {
+        sectionSelect.addEventListener('change', async (e) => {
+            const selectedSection = e.target.value;
+            updateManageSchedulesState({
+                selectedSection,
+                selectedStudent: null,
+                selectedAcademicYear: null,
+                selectedSemester: null,
+                schedules: []
+            });
+            await populateStudentDropdown();
+        });
+    }
+    
+    // Student selection change
+    const studentSelect = document.getElementById('scheduleStudentSelect');
+    if (studentSelect) {
+        studentSelect.addEventListener('change', async (e) => {
+            const selectedStudent = e.target.value;
+            updateManageSchedulesState({
+                selectedStudent,
+                selectedAcademicYear: null,
+                selectedSemester: null,
+                schedules: []
+            });
+            await populateAcademicYearSemesterDropdowns();
+            if (selectedStudent) {
+                await refreshSchedulesTable();
+            }
+        });
+    }
+    
+    // Academic year change
+    const yearSelect = document.getElementById('scheduleAcademicYear');
+    if (yearSelect) {
+        yearSelect.addEventListener('change', debounce(async (e) => {
+            const selectedAcademicYear = e.target.value;
+            updateManageSchedulesState({ selectedAcademicYear });
+            await refreshSchedulesTable();
+        }, 300));
+    }
+    
+    // Semester change
+    const semesterSelect = document.getElementById('scheduleSemester');
+    if (semesterSelect) {
+        semesterSelect.addEventListener('change', debounce(async (e) => {
+            const selectedSemester = e.target.value;
+            updateManageSchedulesState({ selectedSemester });
+            await refreshSchedulesTable();
+        }, 300));
+    }
+    
+    // Action buttons
+    const bulkBtn = document.getElementById('openBulkScheduleModal');
+    if (bulkBtn) {
+        bulkBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Show bulk modal directly
+            const modal = document.getElementById('bulkScheduleModal');
+            if (modal) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+        });
+    }
+    
+    // View All Schedules button
+    const viewAllBtn = document.getElementById('viewAllSchedulesBtn');
+    if (viewAllBtn) {
+        viewAllBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Show all schedules table directly
+            updateManageSchedulesState({ currentStep: 5 });
+            // Load all schedules without filtering
+            loadAllSchedules();
+        });
+    }
+}
+
+// Modal Functions
+function openEditScheduleModal(schedule) {
+    // Populate modal with schedule data
+    const modal = document.getElementById('scheduleModal');
+    if (!modal) return;
+    
+    // Set modal title
+    const title = document.getElementById('scheduleModalTitle');
+    if (title) title.textContent = 'Edit Schedule Item';
+    
+    // Populate form fields
+    const form = document.getElementById('scheduleForm');
+    if (form) {
+        form.scheduleEditId.value = schedule.id;
+        form.scheduleSubjectCodeModal.value = schedule.subjectCode || '';
+        form.scheduleDescriptionModal.value = schedule.description || '';
+        form.scheduleUnitsModal.value = schedule.units || '';
+        form.scheduleLecModal.value = schedule.lec || '';
+        form.scheduleLabModal.value = schedule.lab || '';
+        form.scheduleDayModal.value = schedule.day || '';
+        form.scheduleStartTimeModal.value = schedule.startTime || '';
+        form.scheduleEndTimeModal.value = schedule.endTime || '';
+        form.scheduleRoomModal.value = schedule.room || '';
+        form.scheduleFacultyModal.value = schedule.faculty || '';
+        form.scheduleAcademicYearModal.value = schedule.academicYear || '';
+        form.scheduleSemesterModal.value = schedule.semester || '';
+    }
+    
+    // Show modal
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Initialize Manage Schedules section
+async function initializeManageSchedules() {
+    try {
+        // Reset state
+        resetManageSchedulesState();
+        
+        // Setup event listeners
+        setupManageSchedulesEventListeners();
+        
+        // Populate initial dropdowns
+        await populateCourseDropdown();
+        
+        // Show initial state
+        updateUIFromState();
+        
+        console.log('Manage Schedules section initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize Manage Schedules section:', error);
+        updateManageSchedulesState({ error: `Initialization failed: ${error.message}` });
+    }
+}
+
+// Helper function to populate schedule modal dropdowns for a student
+async function populateScheduleDropdownsForStudent(studentId) {
+    // Populate subject dropdown
+    const subjectSelect = document.getElementById('scheduleSubjectCodeModal');
+    if (subjectSelect) {
+        try {
+            const response = await fetch('/api/auth/subjects');
+            if (response.ok) {
+                const subjects = await response.json();
+                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.code;
+                    option.textContent = `${subject.code} - ${subject.name}`;
+                    option.dataset.units = subject.units;
+                    option.dataset.description = subject.name;
+                    subjectSelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading subjects:', error);
+        }
+    }
+    
+    // Populate faculty dropdown
+    const facultySelect = document.getElementById('scheduleFacultyModal');
+    if (facultySelect) {
+        try {
+            const response = await fetch('/api/auth/faculty');
+            if (response.ok) {
+                const faculty = await response.json();
+                facultySelect.innerHTML = '<option value="">-- Select Faculty --</option>';
+                faculty.forEach(f => {
+                    const option = document.createElement('option');
+                    option.value = f.name;
+                    option.textContent = f.name;
+                    facultySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading faculty:', error);
+        }
+    }
+    
+    // Populate academic year dropdown
+    const yearSelect = document.getElementById('scheduleAcademicYearModal');
+    if (yearSelect) {
+        const currentYear = new Date().getFullYear();
+        yearSelect.innerHTML = '<option value="">-- Select Academic Year --</option>';
+        for (let i = -2; i <= 5; i++) {
+            const start = currentYear + i;
+            const end = start + 1;
+            const value = `${start}-${end}`;
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            yearSelect.appendChild(option);
+        }
+    }
+}
+
+// Export functions for global access
+window.manageSchedules = {
+    initialize: initializeManageSchedules,
+    createSchedule,
+    updateSchedule,
+    deleteSchedule,
+    bulkAssignSchedules,
+    openEditScheduleModal,
+    resetState: resetManageSchedulesState
+};
+
+// At the top of the file, outside functions
+let selectedAcademicYear = null;
+
+function setupModal(modalId, openButtonId, closeButtonId, formId, onSubmit, onOpen, cancelButtonId) {
     const modal = document.getElementById(modalId);
     const openBtn = document.getElementById(openButtonId);
     const closeBtn = document.getElementById(closeButtonId);
@@ -127,10 +939,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadSectionsTable();
                 break;
             case 'manageSchedules':
-                await loadSchedulesTable();
+                await initializeManageSchedules();
                 break;
             case 'encodeGrades':
-                await loadEncodeGradesData();
+                setTimeout(() => { loadEncodeGradesData(); }, 0);
                 break;
             case 'manageAccounts':
                 await loadAccountsTable();
@@ -184,204 +996,465 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load encode grades data
     async function loadEncodeGradesData() {
         try {
-            // Load students with schedules only
-            const usersResponse = await fetch('/api/auth/users');
-            let students = [];
-            if (usersResponse.ok) {
-                const users = await usersResponse.json();
-                // Only students with at least one schedule
-                for (const user of users.filter(u => u.role === 'student')) {
-                    const schedRes = await fetch(`/api/auth/schedules/${user.id}`);
-                    if (schedRes.ok) {
-                        const scheds = await schedRes.json();
-                        if (scheds.length > 0) students.push(user);
-                    }
-                }
+            const courseSelect = document.getElementById('gradeCourseSelect');
+            const sectionSelect = document.getElementById('gradeSectionSelect');
+            const yearLevelSelect = document.getElementById('gradeYearLevelSelect');
+            const semesterSelect = document.getElementById('gradeSemesterSelect');
+            const subjectSelect = document.getElementById('gradeSubjectSelect');
+            // Remove termSelect
+            if (!courseSelect || !sectionSelect || !yearLevelSelect || !semesterSelect || !subjectSelect) {
+                console.error('Required dropdown elements not found');
+                return;
             }
-                const studentSelect = document.getElementById('gradeStudentSelect');
-                if (studentSelect) {
-                    studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
-                    students.forEach(student => {
+            await populateCourseDropdown('gradeCourseSelect');
+
+            courseSelect.onchange = async () => {
+                const courseCode = courseSelect.value;
+                sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+                yearLevelSelect.innerHTML = '<option value="">-- Select Year Level --</option>';
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                sectionSelect.disabled = !courseCode;
+                yearLevelSelect.disabled = true;
+                semesterSelect.disabled = true;
+                subjectSelect.disabled = true;
+                document.getElementById('gradeEntrySection').style.display = 'none';
+                if (!courseCode) return;
+                try {
+                    const response = await fetch(`/api/auth/sections?courseCode=${encodeURIComponent(courseCode)}`);
+                    if (response.ok) {
+                        const sections = await response.json();
+                        sections.forEach(section => {
                         const option = document.createElement('option');
-                        option.value = student.id;
-                        option.textContent = `${student.name} (${student.id})`;
-                        studentSelect.appendChild(option);
-                    });
-                }
-            // Term dropdown logic
-                const termSelect = document.getElementById('gradeTermSelect');
-                const subjectSelect = document.getElementById('gradeSubjectSelectEncode');
-                if (studentSelect && termSelect && subjectSelect) {
-                    studentSelect.onchange = async () => {
-                        const studentId = studentSelect.value;
-                    termSelect.innerHTML = '<option value="">-- Select Term --</option>';
-                            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-                    if (!studentId) return;
-                    // Get all terms from schedules
-                    const schedRes = await fetch(`/api/auth/schedules/${studentId}`);
-                    if (schedRes.ok) {
-                        const scheds = await schedRes.json();
-                        // Build unique term pairs
-                        const termPairs = [];
-                        scheds.forEach(s => {
-                            if (s.academicYear && s.semester) {
-                                const ay = toYearRange(s.academicYear);
-                                const key = `${ay}||${s.semester}`;
-                                if (!termPairs.some(tp => tp.key === key)) {
-                                    termPairs.push({ key, academicYear: ay, semester: s.semester });
-                                }
-                            }
-                        });
-                        termPairs.forEach(tp => {
-                            const option = document.createElement('option');
-                            option.value = tp.key;
-                            option.textContent = `S.Y. ${tp.academicYear} - ${tp.semester}`;
-                            termSelect.appendChild(option);
+                            option.value = section.id; // Use unique section ID
+                            option.textContent = `${section.name} (${section.yearLevel}${section.sectionLetter}) [${section.id}]`;
+                            sectionSelect.appendChild(option);
                         });
                     }
-                };
-                    termSelect.onchange = async () => {
-                        const studentId = studentSelect.value;
-                    const termVal = termSelect.value;
+                } catch (error) {
+                    console.error('Error loading sections:', error);
+                }
+            };
+
+            sectionSelect.onchange = async () => {
+                const sectionId = sectionSelect.value;
+                yearLevelSelect.innerHTML = '<option value="">-- Select Year Level --</option>';
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
                             subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-                    if (!studentId || !termVal) return;
-                    // Split value into academicYear and semester
-                    let [academicYear, semester] = termVal.split('||');
-                    academicYear = toYearRange(academicYear);
-                    const schedRes = await fetch(`/api/auth/schedules/${studentId}`);
-                    if (schedRes.ok) {
-                        const scheds = await schedRes.json();
-                        const filtered = scheds.filter(s =>
-                            (s.academicYear && s.academicYear.trim() === academicYear.trim()) &&
-                            (s.semester && s.semester.trim().toLowerCase() === semester.trim().toLowerCase())
-                        );
-                        filtered.forEach(item => {
+                yearLevelSelect.disabled = !sectionId;
+                semesterSelect.disabled = true;
+                subjectSelect.disabled = true;
+                document.getElementById('gradeEntrySection').style.display = 'none';
+                if (!sectionId) return;
+                // Get year level from section (if available)
+                try {
+                    const response = await fetch(`/api/auth/sections?courseCode=${encodeURIComponent(courseSelect.value)}`);
+                    if (response.ok) {
+                        const sections = await response.json();
+                        const selectedSection = sections.find(s => s.id === sectionId);
+                        if (selectedSection && selectedSection.yearLevel) {
+                            selectedAcademicYear = selectedSection.yearLevel;
                             const option = document.createElement('option');
-                            option.value = item.subjectCode;
-                            option.textContent = `${item.subjectCode} - ${item.description} (${item.units} units)`;
-                            subjectSelect.appendChild(option);
+                            option.value = selectedSection.yearLevel;
+                            option.textContent = selectedSection.yearLevel;
+                            yearLevelSelect.appendChild(option);
+                            yearLevelSelect.value = selectedSection.yearLevel;
+                            yearLevelSelect.disabled = false;
+                            // Auto-trigger year level change
+                            yearLevelSelect.dispatchEvent(new Event('change'));
+                        } else {
+                            // fallback: allow manual selection if needed
+                            for (let i = 1; i <= 5; i++) {
+                                const option = document.createElement('option');
+                                option.value = i;
+                                option.textContent = i;
+                                yearLevelSelect.appendChild(option);
+                            }
+                            yearLevelSelect.disabled = false;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error loading year level:', error);
+                }
+            };
+
+            yearLevelSelect.onchange = async () => {
+                const courseCode = courseSelect.value;
+                const yearLevel = yearLevelSelect.value;
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                semesterSelect.disabled = !yearLevel;
+                subjectSelect.disabled = true;
+                document.getElementById('gradeEntrySection').style.display = 'none';
+                if (!courseCode || !yearLevel) return;
+                // Get semesters from curriculum for this course/year
+                try {
+                    const response = await fetch(`/api/curriculum/by-course?courseCode=${encodeURIComponent(courseCode)}`);
+                    if (response.ok) {
+                        const curricula = await response.json();
+                        const semesters = [...new Set(curricula.filter(c => c.yearLevel == yearLevel).map(c => c.semester))];
+                        semesters.forEach(sem => {
+                            const option = document.createElement('option');
+                            option.value = sem;
+                            option.textContent = sem;
+                            semesterSelect.appendChild(option);
                         });
-                        if (filtered.length === 0) {
+                    }
+                } catch (error) {
+                    console.error('Error loading semesters:', error);
+                }
+            };
+
+            semesterSelect.onchange = async () => {
+                const courseCode = courseSelect.value;
+                const yearLevel = yearLevelSelect.value;
+                const semester = semesterSelect.value;
+                            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                subjectSelect.disabled = !semester;
+                document.getElementById('gradeEntrySection').style.display = 'none';
+                if (!courseCode || !yearLevel || !semester) return;
+                // Get curriculum for this course/year/semester
+                try {
+                    const response = await fetch(`/api/curriculum/by-course-year-sem?courseCode=${encodeURIComponent(courseCode)}&yearLevel=${encodeURIComponent(yearLevel)}&semester=${encodeURIComponent(semester)}`);
+                    if (response.ok) {
+                        const curricula = await response.json();
+                        if (curricula.length > 0) {
+                            const subjectCodes = curricula[0].subjectCodes.split(',');
+                            // Fetch subject details for each code
+                            for (const code of subjectCodes) {
+                                const subjRes = await fetch(`/api/auth/subjects`);
+                                if (subjRes.ok) {
+                                    const allSubjects = await subjRes.json();
+                                    const subject = allSubjects.find(s => s.code === code);
+                                    if (subject) {
                             const option = document.createElement('option');
-                            option.value = '';
-                            option.textContent = 'No subjects scheduled for this term';
-                            option.disabled = true;
+                                        option.value = subject.code;
+                                        option.textContent = `${subject.code} - ${subject.name} (${subject.units} units)`;
                             subjectSelect.appendChild(option);
                         }
                     }
-                    await loadCurrentGradesForStudent(studentId, termVal);
-                };
-            }
-            // Grade input validation
-            const gradeInput = document.getElementById('finalGradeInput');
-            if (gradeInput) {
-                gradeInput.oninput = () => {
-                    const val = gradeInput.value.trim();
-                    let valid = false;
-                    if (!isNaN(parseFloat(val))) {
-                        const num = parseFloat(val);
-                        valid = (num >= 1.0 && num <= 5.0) || (num >= 0 && num <= 100);
-                    } else {
-                        const validLetters = ['A','A-','B+','B','B-','C+','C','C-','D+','D','D-','F','INC','OD','UD','NGY'];
-                        valid = validLetters.includes(val.toUpperCase());
+                            }
+                        }
                     }
-                    gradeInput.style.borderColor = valid ? '#28a745' : '#dc3545';
-                };
-            }
-            // Encode grades form logic
-            const encodeGradesForm = document.getElementById('encodeGradesForm');
-            if (encodeGradesForm) {
-                encodeGradesForm.onsubmit = async (e) => {
-                    e.preventDefault();
-                    const studentId = studentSelect.value;
-                    const term = termSelect.value;
-                    const subjectCode = subjectSelect.value;
-                    const finalGrade = gradeInput.value;
-                    const remarks = document.getElementById('gradeRemarksSelect').value;
-                    if (!studentId || !term || !subjectCode || !finalGrade) {
-                        alert('Please fill in all required fields.');
-                        return;
-                    }
-                    // Use the correct delimiter for term splitting
-                    let academicYear, semester;
-                    if (term.includes('||')) {
-                        [academicYear, semester] = term.split('||').map(s => s.trim());
-                    } else if (term.includes('-')) {
-                        // fallback for old format
-                        let parts = term.split('-');
-                        academicYear = parts[0].trim();
-                        semester = parts.slice(1).join('-').trim();
-                    } else {
-                        academicYear = '';
-                        semester = '';
-                    }
-                    // Prevent duplicate grade encoding
-                    const gradesRes = await fetch(`/api/student/grades/${studentId}/term?semester=${encodeURIComponent(semester)}&academicYear=${encodeURIComponent(toYearRange(academicYear))}`);
-                    if (gradesRes.ok) {
-                        const grades = await gradesRes.json();
-                        if (grades.some(g => g.subjectCode === subjectCode)) {
-                            alert('Grade for this subject and term already exists.');
+                } catch (error) {
+                    console.error('Error loading curriculum subjects:', error);
+                }
+            };
+
+            subjectSelect.onchange = async () => {
+                const subjectCode = subjectSelect.value;
+                const sectionId = sectionSelect.value;
+                const yearLevel = yearLevelSelect.value;
+                const semester = semesterSelect.value;
+                document.getElementById('gradeEntrySection').style.display = 'none';
+                if (!subjectCode || !sectionId || !yearLevel || !semester) return;
+                // Immediately load grade entry table
+                await loadGradeEntryTable(sectionId, subjectCode, yearLevel, semester);
+            };
+
+        } catch (error) {
+            console.error('Error loading encode grades data:', error);
+        }
+    }
+
+    // Load grade entry table with students
+    async function loadGradeEntryTable(sectionId, subjectCode, yearLevel, semester) {
+        try {
+            const studentsResponse = await fetch(`/api/auth/enrollments/section/${sectionId}`);
+            if (!studentsResponse.ok) {
+                console.error('Error loading students for section');
                             return;
                         }
+            const students = await studentsResponse.json();
+            // Use real academic year from first enrolled student, or dropdown if none
+            let academicYear = '';
+            let academicYearDropdown = document.getElementById('gradeAcademicYearSelect');
+            if (!academicYearDropdown) {
+                academicYearDropdown = document.createElement('select');
+                academicYearDropdown.id = 'gradeAcademicYearSelect';
+                academicYearDropdown.style.marginBottom = '10px';
+                academicYearDropdown.innerHTML = '<option value="">-- Select Academic Year --</option>';
+                // Add 4 years (current and next 3)
+                const now = new Date();
+                for (let i = 0; i < 4; i++) {
+                    const y1 = now.getFullYear() + i;
+                    const y2 = y1 + 1;
+                    const val = `${y1}-${y2}`;
+                    const opt = document.createElement('option');
+                    opt.value = val;
+                    opt.textContent = val;
+                    academicYearDropdown.appendChild(opt);
+                }
+                // Insert above grade entry table
+                const entrySection = document.getElementById('gradeEntrySection');
+                if (entrySection) entrySection.parentNode.insertBefore(academicYearDropdown, entrySection);
+            }
+            if (students.length > 0 && students[0].academicYear) {
+                academicYear = students[0].academicYear;
+                academicYearDropdown.value = academicYear;
+                academicYearDropdown.disabled = true;
+            } else {
+                academicYearDropdown.disabled = false;
+                academicYearDropdown.onchange = () => loadGradeEntryTable(sectionId, subjectCode, yearLevel, semester);
+                academicYear = academicYearDropdown.value;
+                if (!academicYear) return; // Wait for user to select
+            }
+            // Get existing grades for this section/subject/academicYear/semester
+            const gradesResponse = await fetch(`/api/auth/grades/section?sectionId=${encodeURIComponent(sectionId)}&subjectCode=${encodeURIComponent(subjectCode)}&academicYear=${encodeURIComponent(academicYear)}&semester=${encodeURIComponent(semester)}`);
+            let existingGrades = [];
+            if (gradesResponse.ok) {
+                existingGrades = await gradesResponse.json();
+            }
+            // Populate the grade entry table (rest of function unchanged)
+            const tableBody = document.getElementById('gradeEntryTableBody');
+            tableBody.innerHTML = '';
+            students.forEach(student => {
+                const existingGrade = existingGrades.find(g => g.studentId === student.id);
+                const row = document.createElement('tr');
+                row.style.borderBottom = '1px solid #dee2e6';
+                row.innerHTML = `
+                    <td style="padding: 12px; border: none;">${student.id}</td>
+                    <td style="padding: 12px; border: none;">${student.name}</td>
+                    <td style="padding: 12px; border: none;">
+                        <input type="number" 
+                               step="0.01" 
+                               min="0" 
+                               max="5" 
+                               class="grade-input" 
+                               data-student-id="${student.id}"
+                               value="${existingGrade ? existingGrade.numericGrade || '' : ''}"
+                               style="width: 80px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;"
+                               placeholder="1.00-5.00"
+                               ${existingGrade && existingGrade.isReleased ? 'disabled' : ''}>
+                    </td>
+                    <td style="padding: 12px; border: none;">
+                        <select class="remarks-select" data-student-id="${student.id}" style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <option value="In Progress" ${existingGrade && existingGrade.remarks === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                            <option value="Passed" ${existingGrade && existingGrade.remarks === 'Passed' ? 'selected' : ''}>Passed</option>
+                            <option value="Failed" ${existingGrade && existingGrade.remarks === 'Failed' ? 'selected' : ''}>Failed</option>
+                            <option value="Incomplete" ${existingGrade && existingGrade.remarks === 'Incomplete' ? 'selected' : ''}>Incomplete (INC)</option>
+                            <option value="Officially Dropped" ${existingGrade && existingGrade.remarks === 'Officially Dropped' ? 'selected' : ''}>Officially Dropped (OD)</option>
+                            <option value="Unofficially Dropped" ${existingGrade && existingGrade.remarks === 'Unofficially Dropped' ? 'selected' : ''}>Unofficially Dropped (UD)</option>
+                            <option value="No Grade Yet" ${existingGrade && existingGrade.remarks === 'No Grade Yet' ? 'selected' : ''}>No Grade Yet (NGY)</option>
+                        </select>
+                    </td>
+                    <td style="padding: 12px; border: none;">
+                        <span class="grade-status" style="padding: 4px 8px; border-radius: 4px; font-size: 0.85em; ${existingGrade && existingGrade.isReleased ? 'background: #d4edda; color: #155724;' : 'background: #f8d7da; color: #721c24;'}">
+                            ${existingGrade && existingGrade.isReleased ? 'Released' : 'Not Released'}
+                        </span>
+                        <button class="btn btn-sm btn-info view-released-grades-btn" data-student-id="${student.id}" style="margin-left:8px;">View Released Grades</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+                const viewBtn = row.querySelector('.view-released-grades-btn');
+                if (viewBtn) {
+                    viewBtn.onclick = async () => {
+                        // Use the same academicYear and semester as the current context
+                        const apiUrl = `/api/student/grades/${student.id}/released?semester=${encodeURIComponent(semester)}&academicYear=${encodeURIComponent(academicYear)}`;
+                        const resp = await fetch(apiUrl);
+                        if (resp.ok) {
+                            const released = await resp.json();
+                            // Fetch all subjects for lookup if needed
+                            let allSubjects = [];
+                            try {
+                                const subjRes = await fetch('/api/auth/subjects');
+                                if (subjRes.ok) allSubjects = await subjRes.json();
+                            } catch {}
+                            const modal = document.getElementById('releasedGradesModal');
+                            const content = document.getElementById('releasedGradesModalContent');
+                            if (released.length === 0) {
+                                content.innerHTML = '<div style="padding:16px;">No released grades for this student in this term.</div>';
+                            } else {
+                                const { rows: gpaRows, overallGpa } = calculateGPA(released, allSubjects);
+                                content.innerHTML = `
+                                    <div style="overflow-x:auto;">
+                                    <table style="width:100%;border-collapse:collapse;margin-bottom:12px;font-size:1.05em;box-shadow:0 2px 8px #e0e0e0;">
+                                        <thead>
+                                            <tr style="background:#f8f9fa;">
+                                                <th style="padding:10px 8px;">Subject Code</th>
+                                                <th style="padding:10px 8px;">Subject Name</th>
+                                                <th style="padding:10px 8px;">Units</th>
+                                                <th style="padding:10px 8px;">Numeric Grade</th>
+                                                <th style="padding:10px 8px;">Letter Grade</th>
+                                                <th style="padding:10px 8px;">GPA</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${gpaRows.map((g, i) => {
+                                                const gpaColor = g.gpa && Number(g.gpa) <= 3.0 ? '#28a745' : (g.gpa ? '#dc3545' : '#666');
+                                                return `<tr style="background:${i%2===0?'#fff':'#f6f6fa'};">
+                                                    <td style="padding:8px 6px;">${g.subjectCode}</td>
+                                                    <td style="padding:8px 6px;">${g.subjectName && g.subjectName !== 'N/A' ? g.subjectName : (allSubjects.find(s => s.code === g.subjectCode)?.name || '')}</td>
+                                                    <td style="padding:8px 6px;text-align:center;">${g.units || ''}</td>
+                                                    <td style="padding:8px 6px;text-align:center;">${g.numericGrade !== null && g.numericGrade !== undefined ? Number(g.numericGrade).toFixed(2) : ''}</td>
+                                                    <td style="padding:8px 6px;text-align:center;">${g.grade || ''}</td>
+                                                    <td style="padding:8px 6px;text-align:center;color:${gpaColor};font-weight:bold;">${g.gpa}</td>
+                                                </tr>`;
+                                            }).join('')}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style="background:#f1f3f4;font-weight:bold;">
+                                                <td colspan="5" style="text-align:right;padding:10px 8px;">Overall GPA:</td>
+                                                <td style="padding:10px 8px;text-align:center;color:${overallGpa && Number(overallGpa) <= 3.0 ? '#28a745' : (overallGpa ? '#dc3545' : '#666')};font-size:1.1em;">${overallGpa}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                    </div>
+                                `;
+                                const modalBox = modal.querySelector('div');
+                                modalBox.style.borderRadius = '12px';
+                                modalBox.style.boxShadow = '0 8px 32px #bdbdbd44';
+                                modalBox.style.padding = '32px 32px 18px 32px';
+                                modalBox.style.maxWidth = '700px';
+                            }
+                            modal.style.display = 'block';
+                                } else {
+                            alert('Failed to fetch released grades.');
+                                }
+                    };
+                            }
+            });
+            document.getElementById('gradeEntrySection').style.display = 'block';
+            updateGradeStatistics(students.length, existingGrades.length, existingGrades.filter(g => g.isReleased).length);
+            setupSaveAllGradesButton(sectionId, subjectCode, academicYear, semester);
+                        } catch (error) {
+            console.error('Error loading grade entry table:', error);
+        }
+    }
+
+    // Update grade statistics
+    function updateGradeStatistics(totalStudents, encodedGrades, releasedGrades) {
+        document.getElementById('statTotalStudents').textContent = totalStudents;
+        document.getElementById('statEncodedGrades').textContent = encodedGrades;
+        document.getElementById('statReleasedGrades').textContent = releasedGrades;
+        
+        // Calculate average grade (placeholder for now)
+        document.getElementById('statAverageGrade').textContent = 'N/A';
+    }
+
+    // Setup save all grades button
+    function setupSaveAllGradesButton(sectionId, subjectCode, academicYear, semester) {
+        const saveAllBtn = document.getElementById('saveAllGradesBtn');
+        const releaseAllBtn = document.getElementById('releaseAllGradesBtn');
+        const unreleaseAllBtn = document.getElementById('unreleaseAllGradesBtn');
+        if (saveAllBtn) {
+            saveAllBtn.onclick = async () => {
+                await saveAllGrades(sectionId, subjectCode, academicYear, semester);
+            };
+        }
+        if (releaseAllBtn) {
+            releaseAllBtn.onclick = async () => {
+                await releaseAllGrades(sectionId, subjectCode, academicYear, semester);
+            };
+        }
+        if (unreleaseAllBtn) {
+            unreleaseAllGradesBtn.onclick = async () => {
+                await unreleaseAllGrades(sectionId, subjectCode, academicYear, semester);
+            };
+        }
+    }
+
+    // Save all grades
+    async function saveAllGrades(sectionId, subjectCode, academicYear, semester) {
+        try {
+            const gradeInputs = document.querySelectorAll('.grade-input');
+            const remarksSelects = document.querySelectorAll('.remarks-select');
+            const grades = [];
+            for (let i = 0; i < gradeInputs.length; i++) {
+                const gradeInput = gradeInputs[i];
+                const remarksSelect = remarksSelects[i];
+                const studentId = gradeInput.dataset.studentId;
+                const gradeValue = gradeInput.value.trim();
+                const remarks = remarksSelect.value;
+                if (gradeValue) {
+                    grades.push({
+                        studentId: studentId,
+                        subjectCode: subjectCode,
+                        academicYear: academicYear,
+                        semester: semester,
+                        numericGrade: gradeValue ? parseFloat(gradeValue) : null,
+                        grade: null, // Let backend convert numeric to letter
+                        remarks: remarks
+                    });
+                }
+            }
+            if (grades.length === 0) {
+                alert('Please enter at least one grade.');
+                        return;
                     }
-                    // Get subject details
-                    const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
-                    const subjectName = selectedOption.textContent.split(' - ')[1]?.split(' (')[0] || 'Unknown Subject';
-                    const units = parseInt(selectedOption.textContent.match(/\((\d+) units\)/)?.[1] || '0');
-                    // Determine grade type
-                    let numericGrade = null;
-                    let letterGrade = null;
-                    if (!isNaN(parseFloat(finalGrade))) {
-                        numericGrade = parseFloat(finalGrade);
-                        if (numericGrade >= 1.0 && numericGrade < 1.25) letterGrade = 'A';
-                        else if (numericGrade >= 1.25 && numericGrade < 1.5) letterGrade = 'A-';
-                        else if (numericGrade >= 1.5 && numericGrade < 1.75) letterGrade = 'B+';
-                        else if (numericGrade >= 1.75 && numericGrade < 2.0) letterGrade = 'B';
-                        else if (numericGrade >= 2.0 && numericGrade < 2.25) letterGrade = 'B-';
-                        else if (numericGrade >= 2.25 && numericGrade < 2.5) letterGrade = 'C+';
-                        else if (numericGrade >= 2.5 && numericGrade < 2.75) letterGrade = 'C';
-                        else if (numericGrade >= 2.75 && numericGrade < 3.0) letterGrade = 'C-';
-                        else if (numericGrade >= 3.0 && numericGrade < 3.25) letterGrade = 'D+';
-                        else if (numericGrade >= 3.25 && numericGrade < 3.5) letterGrade = 'D';
-                        else if (numericGrade >= 3.5 && numericGrade < 5.0) letterGrade = 'D-';
-                        else if (numericGrade >= 5.0) letterGrade = 'F';
-                        else letterGrade = null;
+            const response = await fetch('/api/auth/grades/batch-encode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sectionId: sectionId,
+                    subjectCode: subjectCode,
+                    academicYear: academicYear,
+                    semester: semester,
+                    grades: grades
+                })
+            });
+            if (response.ok) {
+                alert('Grades saved successfully!');
+                await loadGradeEntryTable(sectionId, subjectCode, academicYear.replace('Year ', ''), semester);
                     } else {
-                        letterGrade = finalGrade.toUpperCase();
-                        const gradeMap = { 'A': 1.0, 'A-': 1.25, 'B+': 1.5, 'B': 1.75, 'B-': 2.0, 'C+': 2.25, 'C': 2.5, 'C-': 2.75, 'D+': 3.0, 'D': 3.25, 'D-': 3.5, 'F': 5.0, 'INC': null, 'OD': null, 'UD': null, 'NGY': null };
-                        numericGrade = gradeMap[letterGrade] ?? null;
-                    }
-                    try {
-                        const response = await fetch('/api/student/grade/encode-enhanced', {
+                const error = await response.text();
+                alert('Error saving grades: ' + error);
+            }
+        } catch (error) {
+            console.error('Error saving grades:', error);
+            alert('Error saving grades. Please try again.');
+        }
+    }
+
+    // Release all grades
+    async function releaseAllGrades(sectionId, subjectCode, academicYear, semester) {
+        try {
+            const response = await fetch('/api/auth/grades/release-all', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                studentId,
-                                subjectCode,
-                                subjectName,
-                                units,
-                                grade: letterGrade,
-                                numericGrade: numericGrade,
-                                semester,
-                                academicYear,
-                                isReleased: false
-                            })
-                        });
-                        if (response.ok) {
-                            showNotification('Grade encoded successfully!', 'success');
-                            gradeInput.value = '';
-                            await loadCurrentGradesForStudent(studentId, term);
-                        } else {
-                            const errorText = await response.text();
-                            showNotification(errorText || 'Failed to encode grade', 'error');
+                body: JSON.stringify({
+                    sectionId: sectionId,
+                    subjectCode: subjectCode,
+                    academicYear: academicYear,
+                    semester: semester
+                })
+            });
+            if (response.ok) {
+                alert('All grades released successfully!');
+                await loadGradeEntryTable(sectionId, subjectCode, academicYear.replace('Year ', ''), semester);
+                            } else {
+                const error = await response.text();
+                alert('Error releasing grades: ' + error);
                         }
                     } catch (error) {
-                        showNotification(`Failed to encode grade: ${error.message}`, 'error');
-                    }
-                };
-            }
-        } catch (e) {
-            showNotification('Failed to load encode grades data', 'error');
+            console.error('Error releasing grades:', error);
+            alert('Error releasing grades. Please try again.');
+        }
+    }
+
+    // Unrelease all grades
+    async function unreleaseAllGrades(sectionId, subjectCode, academicYear, semester) {
+        try {
+            const response = await fetch('/api/auth/grades/unrelease-all', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sectionId: sectionId,
+                    subjectCode: subjectCode,
+                    academicYear: academicYear,
+                    semester: semester
+                })
+            });
+                        if (response.ok) {
+                alert('All grades unreleased successfully!');
+                await loadGradeEntryTable(sectionId, subjectCode, academicYear.replace('Year ', ''), semester);
+                        } else {
+                const error = await response.text();
+                alert('Error unreleasing grades: ' + error);
+                        }
+                    } catch (error) {
+            console.error('Error unreleasing grades:', error);
+            alert('Error unreleasing grades. Please try again.');
         }
     }
 
@@ -467,7 +1540,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fetch grades for the selected term
             let grades = [];
             try {
-                const response = await fetch(`/api/student/grades/${studentId}/term?semester=${encodeURIComponent(semester)}&academicYear=${encodeURIComponent(toYearRange(academicYear))}`);
+                const response = await fetch(`/api/student/grades/${studentId}/term?semester=${encodeURIComponent(semester)}&academicYear=${encodeURIComponent(academicYear)}`);
                 if (response.ok) {
                     grades = await response.json();
                 } else {
@@ -578,6 +1651,30 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         };
                         actionsCell.appendChild(releaseBtn);
+                    } else if (grade.isReleased) {
+                        const unreleaseBtn = document.createElement('button');
+                        unreleaseBtn.textContent = 'Unrelease';
+                        unreleaseBtn.classList.add('btn', 'btn-sm', 'btn-warning');
+                        unreleaseBtn.onclick = async () => {
+                            if (confirm(`Unrelease grade for ${grade.subjectCode}? This will hide it from the student.`)) {
+                                try {
+                                    const unreleaseResponse = await fetch(`/api/student/grade/unrelease/${grade.id}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' }
+                                    });
+                                    if (unreleaseResponse.ok) {
+                                        showNotification(`Grade for ${grade.subjectCode} unreleased successfully! This grade is now hidden from the student.`, 'success');
+                                        await loadCurrentGradesForStudent(studentId, termVal);
+                                    } else {
+                                        const errorText = await unreleaseResponse.text();
+                                        showNotification(errorText || 'Failed to unrelease grade', 'error');
+                                    }
+                                } catch (error) {
+                                    showNotification(`Failed to unrelease grade: ${error.message}`, 'error');
+                                }
+                            }
+                        };
+                        actionsCell.appendChild(unreleaseBtn);
                     }
                     if (grade.isReleased) {
                         const releasedLabel = document.createElement('span');
@@ -712,6 +1809,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Set up search functionality for accounts
             setupAccountsSearch();
+            
+            // Set up course filter for sections
+            await setupSectionsCourseFilter();
+            
+            // Set up course filter for students
+            await setupStudentsCourseFilter();
             
             // Set up auto-refresh for enrollment requests
             setInterval(async () => {
@@ -911,6 +2014,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Manage Students Search Feature ---
+    const studentSearchInput = document.getElementById('studentSearchInput');
+    let allStudentsCache = [];
+
     async function loadStudentsTable() {
         let users = [];
         try {
@@ -923,9 +2030,25 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Failed to fetch users from backend:', e);
         }
         // Show all users except admin
-        const students = users.filter(u => u.id !== 'admin')
+        let students = users.filter(u => u.id !== 'admin')
             .sort((a,b) => a.name.localeCompare(b.name));
-        console.log('Filtered students:', students); // DEBUG LINE
+        
+        // Get the selected course filter
+        const courseFilter = document.getElementById('studentCourseFilter')?.value;
+        
+        // Filter students by course if a filter is selected
+        if (courseFilter) {
+            students = students.filter(student => student.course === courseFilter);
+        }
+        
+        allStudentsCache = students; // Cache for search
+        renderStudentsTable(students);
+        users.forEach(u => {
+            console.log(`User: id=${u.id}, name=${u.name}, admissionStatus=${u.admissionStatus}, status=${u.status}`);
+        });
+    }
+
+    function renderStudentsTable(students) {
         const tableBody = document.getElementById('studentsTable')?.querySelector('tbody');
         if (!tableBody) return;
         tableBody.innerHTML = '';
@@ -974,8 +2097,22 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             actionsCell.appendChild(editBtn); actionsCell.appendChild(deleteBtn);
         });
-        users.forEach(u => {
-            console.log(`User: id=${u.id}, name=${u.name}, admissionStatus=${u.admissionStatus}, status=${u.status}`);
+    }
+
+    if (studentSearchInput) {
+        studentSearchInput.addEventListener('input', () => {
+            const query = studentSearchInput.value.trim().toLowerCase();
+            if (!query) {
+                renderStudentsTable(allStudentsCache);
+                return;
+            }
+            const filtered = allStudentsCache.filter(student =>
+                student.id.toLowerCase().includes(query) ||
+                student.name.toLowerCase().includes(query) ||
+                (student.course || '').toLowerCase().includes(query) ||
+                (student.section || '').toLowerCase().includes(query)
+            );
+            renderStudentsTable(filtered);
         });
     }
 
@@ -1102,9 +2239,19 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Failed to fetch sections from backend:', e);
         }
+        
+        // Get the selected course filter
+        const courseFilter = document.getElementById('sectionCourseFilter')?.value;
+        
+        // Filter sections by course if a filter is selected
+        if (courseFilter) {
+            sections = sections.filter(section => section.courseCode === courseFilter);
+        }
+        
         const tableBody = document.getElementById('sectionsTable')?.querySelector('tbody');
         if (!tableBody) return;
         tableBody.innerHTML = '';
+        
         for (const section of sections) {
             // Fetch the number of students in this section
             let enrollmentCount = 0;
@@ -1138,7 +2285,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openEditSectionModal(section) {
+    // Set up course filter for sections table
+    async function setupSectionsCourseFilter() {
+        try {
+            // Populate the course filter dropdown
+            await populateCourseDropdown('sectionCourseFilter');
+            
+            // Set up event listener for course filter
+            const courseFilter = document.getElementById('sectionCourseFilter');
+            if (courseFilter) {
+                courseFilter.addEventListener('change', async () => {
+                    await loadSectionsTable();
+                });
+            }
+        } catch (error) {
+            console.error('Error setting up sections course filter:', error);
+        }
+    }
+
+    // Set up course filter for students table
+    async function setupStudentsCourseFilter() {
+        try {
+            // Populate the course filter dropdown
+            await populateCourseDropdown('studentCourseFilter');
+            
+            // Set up event listener for course filter
+            const courseFilter = document.getElementById('studentCourseFilter');
+            if (courseFilter) {
+                courseFilter.addEventListener('change', async () => {
+                    await loadStudentsTable();
+                });
+            }
+        } catch (error) {
+            console.error('Error setting up students course filter:', error);
+        }
+    }
+
+    async function openEditSectionModal(section) {
         document.getElementById('sectionModalTitle').textContent = "Edit Section";
         const form = document.getElementById('sectionForm');
         form.reset();
@@ -1146,11 +2329,40 @@ document.addEventListener('DOMContentLoaded', () => {
         form.sectionCodeModal.value = section.id;
         document.getElementById('sectionCodeModal').readOnly = true;
         form.sectionNameModal.value = section.name;
-        populateCourseDropdown('sectionCourseCodeModal', section.courseCode);
+        
+        // Populate course filter dropdown
+        await populateCourseDropdown('sectionCourseFilter', section.courseCode);
+        
+        // Populate course code dropdown with the section's course
+        await populateCourseDropdown('sectionCourseCodeModal', section.courseCode);
+        
         form.sectionYearLevelModal.value = section.yearLevel || '';
         form.sectionLetterModal.value = section.sectionLetter || '';
         form.sectionMaxCapacityModal.value = section.maxCapacity || 30;
         form.sectionCurrentEnrollmentModal.value = section.currentEnrollment || 0;
+        
+        // Set up course filter functionality for edit mode
+        document.getElementById('sectionCourseFilter').onchange = async function() {
+            const selectedCourse = this.value;
+            const courseCodeSelect = document.getElementById('sectionCourseCodeModal');
+            
+            if (selectedCourse) {
+                // Filter course code dropdown to show only the selected course
+                courseCodeSelect.innerHTML = '<option value="">-- Select Course --</option>';
+                const option = document.createElement('option');
+                option.value = selectedCourse;
+                option.textContent = selectedCourse;
+                courseCodeSelect.appendChild(option);
+                courseCodeSelect.value = selectedCourse;
+            } else {
+                // Show all courses if no filter is selected
+                await populateCourseDropdown('sectionCourseCodeModal');
+            }
+            
+            // Trigger auto-generation
+            generateSectionNameAndId();
+        };
+        
         document.getElementById('sectionModal').style.display = 'block';
         document.body.style.overflow = 'hidden';
     }
@@ -1236,7 +2448,35 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('sectionForm').reset();
             document.getElementById('sectionEditCode').value = '';
             document.getElementById('sectionCodeModal').readOnly = false;
+            
+            // Populate course filter dropdown
+            await populateCourseDropdown('sectionCourseFilter');
+            
+            // Populate course code dropdown
             await populateCourseDropdown('sectionCourseCodeModal');
+            
+            // Set up course filter functionality
+            document.getElementById('sectionCourseFilter').onchange = async function() {
+                const selectedCourse = this.value;
+                const courseCodeSelect = document.getElementById('sectionCourseCodeModal');
+                
+                if (selectedCourse) {
+                    // Filter course code dropdown to show only the selected course
+                    courseCodeSelect.innerHTML = '<option value="">-- Select Course --</option>';
+                    const option = document.createElement('option');
+                    option.value = selectedCourse;
+                    option.textContent = selectedCourse;
+                    courseCodeSelect.appendChild(option);
+                    courseCodeSelect.value = selectedCourse;
+                } else {
+                    // Show all courses if no filter is selected
+                    await populateCourseDropdown('sectionCourseCodeModal');
+                }
+                
+                // Trigger auto-generation
+                generateSectionNameAndId();
+            };
+            
             // Set up auto-generation listeners
             document.getElementById('sectionCourseCodeModal').onchange = generateSectionNameAndId;
             document.getElementById('sectionYearLevelModal').onchange = generateSectionNameAndId;
@@ -1245,6 +2485,8 @@ document.addEventListener('DOMContentLoaded', () => {
     );
 
     // --- Subjects CRUD ---
+    let allSubjectsCache = []; // Cache for search functionality
+    
     async function loadSubjectsTable() {
         let subjects = [];
         try {
@@ -1255,6 +2497,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error('Failed to fetch subjects from backend:', e);
         }
+        allSubjectsCache = subjects; // Cache for search
+        renderSubjectsTable(subjects);
+    }
+
+    function renderSubjectsTable(subjects) {
         const tableBody = document.getElementById('subjectsTable')?.querySelector('tbody');
         if (!tableBody) return;
         tableBody.innerHTML = '';
@@ -1286,6 +2533,25 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             actionsCell.appendChild(editBtn);
             actionsCell.appendChild(deleteBtn);
+        });
+    }
+
+    // Set up search functionality for subjects
+    const subjectSearchInput = document.getElementById('subjectSearchInput');
+    if (subjectSearchInput) {
+        subjectSearchInput.addEventListener('input', () => {
+            const query = subjectSearchInput.value.trim().toLowerCase();
+            if (!query) {
+                renderSubjectsTable(allSubjectsCache);
+                return;
+            }
+            const filtered = allSubjectsCache.filter(subject =>
+                subject.code.toLowerCase().includes(query) ||
+                subject.name.toLowerCase().includes(query) ||
+                (subject.courseCode || '').toLowerCase().includes(query) ||
+                (subject.description || '').toLowerCase().includes(query)
+            );
+            renderSubjectsTable(filtered);
         });
     }
 
@@ -1697,114 +2963,171 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             console.error('Failed to fetch curricula:', e);
+            window.showNotification('Failed to load curriculum data', 'error');
+            return;
         }
+        
         const filterSelect = document.getElementById('curriculumCourseFilter');
         const selectedCourse = filterSelect ? filterSelect.value : '';
         lastCurriculumCourseFilter = selectedCourse;
+        
         if (selectedCourse) {
             curricula = curricula.filter(c => c.courseCode === selectedCourse);
         }
+        
         const tableBody = document.getElementById('curriculumTable')?.querySelector('tbody');
         if (!tableBody) return;
+        
         tableBody.innerHTML = '';
+        
         if (curricula.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No curriculum data yet.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No curriculum data found.</td></tr>';
             return;
         }
+        
         for (const curriculum of curricula) {
             const row = tableBody.insertRow();
-            row.insertCell().textContent = curriculum.courseCode;
-            row.insertCell().textContent = curriculum.yearLevel;
-            row.insertCell().textContent = curriculum.semester;
+            row.insertCell().textContent = curriculum.courseCode || '';
+            row.insertCell().textContent = curriculum.yearLevel || '';
+            row.insertCell().textContent = curriculum.semester || '';
+            
             const subjectCodes = curriculum.subjectCodes || '';
             const subjectCodesArray = Array.isArray(subjectCodes) ? subjectCodes : subjectCodes.split(',').filter(s => s.trim());
             row.insertCell().textContent = subjectCodesArray.join(', ');
+            
             const actionsCell = row.insertCell();
+            
             const editBtn = document.createElement('button');
             editBtn.textContent = 'Edit';
             editBtn.classList.add('btn', 'btn-sm', 'btn-edit');
             editBtn.onclick = () => openEditCurriculumModal(curriculum);
+            
             const deleteBtn = document.createElement('button');
             deleteBtn.textContent = 'Delete';
             deleteBtn.classList.add('btn', 'btn-sm', 'btn-danger');
             deleteBtn.onclick = () => deleteCurriculum(curriculum.id);
+            
             actionsCell.appendChild(editBtn);
             actionsCell.appendChild(deleteBtn);
         }
     }
 
     // Curriculum modal setup
-    curriculumSubjectsSelect = document.getElementById('curriculumSubjects');
-    curriculumRequiredUnitsInput = document.getElementById('curriculumRequiredUnits');
-    curriculumUnitsDisplay = document.getElementById('curriculumUnitsDisplay');
-    curriculumNavLink = document.querySelector('a[data-target="manageCurriculum"]');
+    const curriculumSubjectsSelect = document.getElementById('curriculumSubjects');
+    const curriculumRequiredUnitsInput = document.getElementById('curriculumRequiredUnits');
+    const curriculumUnitsDisplay = document.getElementById('curriculumUnitsDisplay');
+    const curriculumNavLink = document.querySelector('a[data-target="manageCurriculum"]');
+    let lastCurriculumCourseFilter = '';
 
     async function updateCurriculumUnitsDisplay() {
-        if (!curriculumSubjectsSelect || !curriculumRequiredUnitsInput || !curriculumUnitsDisplay) return;
+        const subjectsSelect = document.getElementById('curriculumSubjects');
+        const requiredUnitsInput = document.getElementById('curriculumRequiredUnits');
+        const unitsDisplay = document.getElementById('curriculumUnitsDisplay');
         
-        const selectedOptions = Array.from(curriculumSubjectsSelect.selectedOptions);
+        if (!subjectsSelect || !requiredUnitsInput || !unitsDisplay) return;
+        
+        const selectedOptions = Array.from(subjectsSelect.selectedOptions);
         let totalUnits = 0;
+        
         for (const opt of selectedOptions) {
             const match = opt.textContent.match(/\((\d+(?:\.\d+)?) units\)/);
             if (match) totalUnits += parseFloat(match[1]);
         }
-        const requiredUnits = parseFloat(curriculumRequiredUnitsInput.value) || 0;
-        curriculumUnitsDisplay.textContent = `Total Units: ${totalUnits} / Required: ${requiredUnits}`;
+        
+        const requiredUnits = parseFloat(requiredUnitsInput.value) || 0;
+        unitsDisplay.textContent = `Total Units: ${totalUnits} / Required: ${requiredUnits}`;
+        
         if (totalUnits < requiredUnits) {
-            curriculumUnitsDisplay.style.color = 'orange';
-            curriculumUnitsDisplay.textContent += ' (Not enough units)';
+            unitsDisplay.style.color = 'orange';
+            unitsDisplay.textContent += ' (Not enough units)';
         } else if (totalUnits > requiredUnits) {
-            curriculumUnitsDisplay.style.color = 'red';
-            curriculumUnitsDisplay.textContent += ' (Too many units)';
+            unitsDisplay.style.color = 'red';
+            unitsDisplay.textContent += ' (Too many units)';
         } else {
-            curriculumUnitsDisplay.style.color = 'green';
-            curriculumUnitsDisplay.textContent += ' (OK)';
+            unitsDisplay.style.color = 'green';
+            unitsDisplay.textContent += ' (OK)';
         }
+        
         return { totalUnits, requiredUnits };
     }
 
     function openEditCurriculumModal(curriculum) {
-        document.getElementById('curriculumModalTitle').textContent = 'Edit Curriculum';
+        const modalTitle = document.getElementById('curriculumModalTitle');
         const form = document.getElementById('curriculumForm');
+        const editId = document.getElementById('curriculumEditId');
+        const courseCode = document.getElementById('curriculumCourseCode');
+        const yearLevel = document.getElementById('curriculumYearLevel');
+        const semester = document.getElementById('curriculumSemester');
+        const requiredUnits = document.getElementById('curriculumRequiredUnits');
+        const modal = document.getElementById('curriculumModal');
+        
+        if (!modalTitle || !form || !editId || !courseCode || !yearLevel || !semester || !requiredUnits || !modal) {
+            window.showNotification('Curriculum modal elements not found', 'error');
+            return;
+        }
+        
+        modalTitle.textContent = 'Edit Curriculum';
         form.reset();
+        
         // First, populate the course dropdown, then set its value and continue
         populateCourseDropdown('curriculumCourseCode').then(() => {
-            document.getElementById('curriculumEditId').value = curriculum.id;
-            document.getElementById('curriculumCourseCode').value = curriculum.courseCode;
-            document.getElementById('curriculumYearLevel').value = curriculum.yearLevel;
-            document.getElementById('curriculumSemester').value = curriculum.semester;
-            if (curriculumRequiredUnitsInput) curriculumRequiredUnitsInput.value = curriculum.requiredUnits || 25;
+            editId.value = curriculum.id || '';
+            courseCode.value = curriculum.courseCode || '';
+            yearLevel.value = curriculum.yearLevel || '';
+            semester.value = curriculum.semester || '';
+            requiredUnits.value = curriculum.requiredUnits || 25;
+            
             // Handle both string and array formats for backward compatibility
             const subjectCodes = curriculum.subjectCodes || '';
             const subjectCodesArray = Array.isArray(subjectCodes) ? subjectCodes : subjectCodes.split(',').filter(s => s.trim());
             populateSubjectDropdown('curriculumSubjects', curriculum.courseCode, subjectCodesArray);
-            document.getElementById('curriculumModal').style.display = 'block';
+            
+            modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
             updateCurriculumUnitsDisplay();
         });
     }
 
     function openAddCurriculumModal() {
-        document.getElementById('curriculumModalTitle').textContent = 'Add Curriculum';
+        const modalTitle = document.getElementById('curriculumModalTitle');
         const form = document.getElementById('curriculumForm');
+        const editId = document.getElementById('curriculumEditId');
+        const requiredUnits = document.getElementById('curriculumRequiredUnits');
+        const modal = document.getElementById('curriculumModal');
+        
+        if (!modalTitle || !form || !editId || !requiredUnits || !modal) {
+            window.showNotification('Curriculum modal elements not found', 'error');
+            return;
+        }
+        
+        modalTitle.textContent = 'Add Curriculum';
         form.reset();
-        document.getElementById('curriculumEditId').value = '';
-        if (curriculumRequiredUnitsInput) curriculumRequiredUnitsInput.value = 25;
+        editId.value = '';
+        requiredUnits.value = 25;
+        
         populateCourseDropdown('curriculumCourseCode', lastCurriculumCourseFilter);
         populateSubjectDropdown('curriculumSubjects', lastCurriculumCourseFilter, []);
-        document.getElementById('curriculumModal').style.display = 'block';
+        
+        modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
         updateCurriculumUnitsDisplay();
     }
 
     async function deleteCurriculum(id) {
         if (!confirm('Are you sure you want to delete this curriculum?')) return;
+        
         try {
             const response = await fetch(`/api/curriculum/${id}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error('Failed to delete curriculum');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to delete curriculum');
+            }
+            
             await loadCurriculumTable();
+            window.showNotification('Curriculum deleted successfully', 'success');
         } catch (e) {
-            alert(e.message);
+            console.error('Failed to delete curriculum:', e);
+            window.showNotification(`Failed to delete curriculum: ${e.message}`, 'error');
         }
     }
 
@@ -1882,9 +3205,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Setup curriculum course filter
+    async function setupCurriculumCourseFilter() {
+        const filterSelect = document.getElementById('curriculumCourseFilter');
+        if (!filterSelect) return;
+        
+        try {
+            const response = await fetch('/api/auth/courses');
+            if (response.ok) {
+                const courses = await response.json();
+                filterSelect.innerHTML = '<option value="">-- All Courses --</option>';
+                courses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.code;
+                    option.textContent = course.name;
+                    filterSelect.appendChild(option);
+                });
+                
+                // Add change event listener
+                filterSelect.addEventListener('change', () => {
+                    loadCurriculumTable();
+                });
+            }
+        } catch (e) {
+            console.error('Failed to setup curriculum course filter:', e);
+        }
+    }
+    
     // Attach curriculum section to sidebar navigation
     if (curriculumNavLink) {
         curriculumNavLink.addEventListener('click', () => {
+            setupCurriculumCourseFilter();
             loadCurriculumTable();
         });
     }
@@ -2033,8 +3384,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Notification utility for admin panel
-    function showNotification(message, type = 'info') {
+    // Notification utility for admin panel (moved to global scope)
+    window.showNotification = function(message, type = 'info') {
         const notification = document.createElement('div');
         notification.style.cssText = `
             position: fixed;
@@ -2097,144 +3448,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Schedule Modal Logic ---
-    setupModal('scheduleModal', 'openAddScheduleModal', 'closeScheduleModal', 'scheduleForm',
-        async (form) => {
-            // Gather form data
-            const id = form.scheduleEditId.value;
-            const studentId = document.getElementById('scheduleStudentSelect').value;
-            const subjectCode = form.scheduleSubjectCodeModal.value;
-            const description = form.scheduleDescriptionModal.value.trim();
-            const units = parseFloat(form.scheduleUnitsModal.value);
-            const lec = parseInt(form.scheduleLecModal.value) || 0;
-            const lab = parseInt(form.scheduleLabModal.value) || 0;
-            const dayTime = form.scheduleDayModal.value;
-            const startTime = form.scheduleTimeModal.value;
-            const endTime = form.scheduleEndTimeModal.value;
-            const timeRange = form.scheduleTimeRangeModal.value;
-            const room = form.scheduleRoomModal.value.trim();
-            const faculty = form.scheduleFacultyModal.value;
-            const academicYear = form.scheduleAcademicYearModal.value.trim();
-            const semester = form.scheduleSemesterModal.value;
-            // Validation
-            const errorDiv = document.getElementById('scheduleErrorMsg');
-            errorDiv.textContent = '';
-            if (!studentId || !subjectCode || !description || !units || !dayTime || !startTime || !endTime || !room || !faculty || !academicYear || !semester) {
-                errorDiv.textContent = 'All fields are required.';
-                return false;
-            }
-            // Frontend overlap validation (basic)
-            const schedules = window.currentSchedules || [];
-            const conflict = schedules.some(item =>
-                item.id !== id &&
-                item.dayTime === dayTime &&
-                ((item.room === room) || (item.faculty === faculty)) &&
-                ((startTime < item.endTime && endTime > item.startTime))
-            );
-            if (conflict) {
-                errorDiv.textContent = 'Warning: Overlapping schedule detected for this room or faculty.';
-            }
-            // Compose day & time string for backend
-            const scheduleData = {
-                studentId, subjectCode, description, units, lec, lab,
-                dayTime, startTime, endTime, timeRange, room, faculty, academicYear, semester
-            };
-            try {
-                let response;
-                if (id) {
-                    response = await fetch(`/api/auth/schedules/${id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(scheduleData)
-                    });
-                } else {
-                    response = await fetch('/api/auth/schedules', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(scheduleData)
-                    });
-                }
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    errorDiv.textContent = errorText || 'Failed to save schedule item';
-                    return false;
-                }
-                await loadSchedulesTable();
-                showNotification('Schedule item saved successfully.', 'success');
-                return true;
-            } catch (e) {
-                errorDiv.textContent = e.message;
-                return false;
-            }
-        },
-        async () => {
-            document.getElementById('scheduleModalTitle').textContent = 'Add Schedule Item';
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('scheduleEditId').value = '';
-            document.getElementById('scheduleErrorMsg').textContent = '';
-            // Populate subject dropdown
-            await populateSubjectDropdown('scheduleSubjectCodeModal');
-            // Populate faculty dropdown (initially unfiltered)
-            await populateFacultyDropdown('scheduleFacultyModal');
-            // Populate academic year dropdown with a range of years
-            const yearSelect = document.getElementById('scheduleAcademicYearModal');
-            if (yearSelect) {
-                yearSelect.innerHTML = '<option value="">-- Select Academic Year --</option>';
-                const currentYear = new Date().getFullYear();
-                for (let i = -2; i <= 5; i++) {
-                    const start = currentYear + i;
-                    const end = start + 1;
-                    const value = `${start}-${end}`;
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = value;
-                    yearSelect.appendChild(option);
-                }
-            }
-            // Set up auto-fill for subject
-            document.getElementById('scheduleSubjectCodeModal').onchange = async (e) => {
-                const code = e.target.value;
-                const response = await fetch('/api/auth/subjects');
-                if (response.ok) {
-                    const subjects = await response.json();
-                    const subj = subjects.find(s => s.code === code);
-                    if (subj) {
-                        document.getElementById('scheduleDescriptionModal').value = subj.name;
-                        document.getElementById('scheduleUnitsModal').value = subj.units;
-                        document.getElementById('scheduleLecModal').value = subj.lec || '';
-                        document.getElementById('scheduleLabModal').value = subj.lab || '';
-                    }
-                }
-                // Filter faculty by selected subject
-                await populateFacultyDropdown('scheduleFacultyModal', '', code);
-                autoCalculateEndTimeAndRange();
-            };
-            // If a subject is already selected (e.g., on edit), filter faculty immediately
-            const subjSelect = document.getElementById('scheduleSubjectCodeModal');
-            if (subjSelect && subjSelect.value) {
-                await populateFacultyDropdown('scheduleFacultyModal', '', subjSelect.value);
-            }
-            // Auto-calculate end time and time range when start time, lec, or lab changes
-            ['scheduleTimeModal', 'scheduleLecModal', 'scheduleLabModal'].forEach(id => {
-                document.getElementById(id).oninput = autoCalculateEndTimeAndRange;
-            });
-            function autoCalculateEndTimeAndRange() {
-                const start = document.getElementById('scheduleTimeModal').value;
-                const lec = parseInt(document.getElementById('scheduleLecModal').value) || 0;
-                const lab = parseInt(document.getElementById('scheduleLabModal').value) || 0;
-                if (!start) return;
-                const [h, m] = start.split(':').map(Number);
-                const totalHours = lec + lab;
-                if (isNaN(h) || isNaN(m) || !totalHours) return;
-                let endH = h + totalHours;
-                let endM = m;
-                if (endH >= 24) endH -= 24;
-                const end = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-                document.getElementById('scheduleEndTimeModal').value = end;
-                document.getElementById('scheduleTimeRangeModal').value = `${start} - ${end}`;
-            }
-        }, 'cancelScheduleForm'
-    );
+    // --- Schedule Modal Logic (Removed Add Schedule Item functionality) ---
 
     function openEditScheduleModal(item) {
         document.getElementById('scheduleModalTitle').textContent = 'Edit Schedule Item';
@@ -2250,9 +3464,11 @@ document.addEventListener('DOMContentLoaded', () => {
         form.scheduleRoomModal.value = item.room;
         form.scheduleAcademicYearModal.value = item.academicYear;
         form.scheduleSemesterModal.value = item.semester;
-        form.scheduleTimeModal.value = item.startTime || '';
+        form.scheduleStartTimeModal.value = item.startTime || '';
         form.scheduleEndTimeModal.value = item.endTime || '';
-        form.scheduleTimeRangeModal.value = item.timeRange || ((item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime}` : '');
+        // Only set form.scheduleStartTimeModal.value and form.scheduleEndTimeModal.value.
+        // Remove or comment out:
+        // form.scheduleTimeRangeModal.value = item.timeRange || ((item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime}` : '');
         populateSubjectDropdown('scheduleSubjectCodeModal', item.subjectCode);
         populateFacultyDropdown('scheduleFacultyModal', item.faculty);
         form.scheduleFacultyModal.value = item.faculty;
@@ -2289,14 +3505,20 @@ document.addEventListener('DOMContentLoaded', () => {
             row.insertCell().textContent = item.units;
             row.insertCell().textContent = item.lec;
             row.insertCell().textContent = item.lab;
-            row.insertCell().textContent = item.dayTime;
+            const dayTimeCell = row.insertCell();
+            if (item.day && item.startTime && item.endTime) {
+                dayTimeCell.textContent = `${item.day}, ${item.startTime} - ${item.endTime}`;
+            } else if (item.dayTime) {
+                dayTimeCell.textContent = item.dayTime;
+            } else {
+                dayTimeCell.textContent = '';
+            }
             row.insertCell().textContent = item.room;
             row.insertCell().textContent = item.faculty;
             row.insertCell().textContent = item.academicYear;
             row.insertCell().textContent = item.semester;
-            row.insertCell().textContent = item.startTime || '';
-            row.insertCell().textContent = item.endTime || '';
-            row.insertCell().textContent = item.timeRange || ((item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime}` : '');
+            // Removed: row.insertCell().textContent = item.startTime || '';
+            // Removed: row.insertCell().textContent = item.endTime || '';
             const actionsCell = row.insertCell();
             const editBtn = document.createElement('button');
             editBtn.textContent = 'Edit';
@@ -2356,157 +3578,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Manage Schedules Section ---
-    async function populateScheduleStudentDropdown() {
-        const select = document.getElementById('scheduleStudentSelect');
-        if (!select) return;
-        try {
-            const response = await fetch('/api/auth/users');
-            if (response.ok) {
-                const users = await response.json();
-                // Show all students regardless of status/admissionStatus
-                const students = users.filter(u => u.role === 'student')
-                    .sort((a,b) => a.name.localeCompare(b.name));
-                select.innerHTML = '<option value="">-- Select Student --</option>';
-                students.forEach(student => {
-                    const option = document.createElement('option');
-                    option.value = student.id;
-                    option.textContent = `${student.name} (${student.id})`;
-                    select.appendChild(option);
-                });
-            }
-        } catch (e) {
-            select.innerHTML = '<option value="">Error loading students</option>';
-        }
-    }
-    async function populateScheduleYearSemesterDropdowns(studentId) {
-        const yearSelect = document.getElementById('scheduleAcademicYear');
-        const semSelect = document.getElementById('scheduleSemester');
-        yearSelect.innerHTML = '<option value="">All Years</option>';
-        semSelect.innerHTML = '<option value="">All Semesters</option>';
-        if (!studentId) return;
-        try {
-            const response = await fetch(`/api/auth/schedules/${studentId}`);
-            if (response.ok) {
-                const schedules = await response.json();
-                const years = [...new Set(schedules.map(s => s.academicYear).filter(Boolean))];
-                years.sort();
-                years.forEach(y => {
-                    const option = document.createElement('option');
-                    option.value = y;
-                    option.textContent = y;
-                    yearSelect.appendChild(option);
-                });
-                const sems = [...new Set(schedules.map(s => s.semester).filter(Boolean))];
-                sems.sort();
-                sems.forEach(s => {
-                    const option = document.createElement('option');
-                    option.value = s;
-                    option.textContent = s;
-                    semSelect.appendChild(option);
-                });
-            }
-        } catch (e) {
-            // ignore
-        }
-    }
-    // --- Event Listeners for Manage Schedules ---
-    const studentSelect = document.getElementById('scheduleStudentSelect');
-    const yearSelect = document.getElementById('scheduleAcademicYear');
-    const semSelect = document.getElementById('scheduleSemester');
-    const addBtn = document.getElementById('openAddScheduleModal');
-    if (studentSelect) {
-        studentSelect.onchange = async () => {
-            await populateScheduleYearSemesterDropdowns(studentSelect.value);
-            yearSelect.value = '';
-            semSelect.value = '';
-            addBtn.disabled = !studentSelect.value;
-            await loadSchedulesTable();
-        };
-    }
-    if (yearSelect) {
-        yearSelect.onchange = loadSchedulesTable;
-    }
-    if (semSelect) {
-        semSelect.onchange = loadSchedulesTable;
-    }
-    if (addBtn) {
-        addBtn.disabled = !studentSelect.value;
-    }
-    // Patch: show message if no student or no schedules
-    const origLoadSchedulesTable = loadSchedulesTable;
-    loadSchedulesTable = async function() {
-        const studentId = studentSelect.value;
-        const year = yearSelect.value;
-        const sem = semSelect.value;
-        const tableBody = document.getElementById('schedulesTable')?.querySelector('tbody');
-        if (!studentId) {
-            if (tableBody) tableBody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#888;">Please select a student to view schedules.</td></tr>';
-            return;
-        }
-        // Fetch all schedules for the student
-        let schedules = [];
-        try {
-            let url = `/api/auth/schedules/${studentId}`;
-            const response = await fetch(url);
-            if (response.ok) {
-                schedules = await response.json();
-            }
-        } catch (e) {
-            schedules = [];
-        }
-        // Filter schedules by year and/or semester
-        let filtered = schedules;
-        if (year) filtered = filtered.filter(s => s.academicYear === year);
-        if (sem) filtered = filtered.filter(s => s.semester === sem);
-        window.currentSchedules = filtered; // For frontend validation
-        if (!tableBody) return;
-        tableBody.innerHTML = '';
-        filtered.forEach(item => {
-            const row = tableBody.insertRow();
-            row.insertCell().textContent = item.subjectCode;
-            row.insertCell().textContent = item.description;
-            row.insertCell().textContent = item.units;
-            row.insertCell().textContent = item.lec;
-            row.insertCell().textContent = item.lab;
-            row.insertCell().textContent = item.dayTime;
-            row.insertCell().textContent = item.room;
-            row.insertCell().textContent = item.faculty;
-            row.insertCell().textContent = item.academicYear;
-            row.insertCell().textContent = item.semester;
-            row.insertCell().textContent = item.startTime || '';
-            row.insertCell().textContent = item.endTime || '';
-            row.insertCell().textContent = item.timeRange || ((item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime}` : '');
-            const actionsCell = row.insertCell();
-            const editBtn = document.createElement('button');
-            editBtn.textContent = 'Edit';
-            editBtn.classList.add('btn', 'btn-sm', 'btn-edit');
-            editBtn.onclick = () => openEditScheduleModal(item);
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'Delete';
-            deleteBtn.classList.add('btn', 'btn-sm', 'btn-danger');
-            deleteBtn.onclick = async () => {
-                if (confirm('Are you sure you want to delete this schedule item?')) {
-                    try {
-                        const response = await fetch(`/api/auth/schedules/${item.id}`, { method: 'DELETE' });
-                        if (!response.ok) throw new Error('Failed to delete schedule item');
-                        await loadSchedulesTable();
-                        showNotification('Schedule item deleted successfully.', 'success');
-                    } catch (e) {
-                        showNotification(e.message, 'error');
-                    }
-                }
-            };
-            actionsCell.appendChild(editBtn);
-            actionsCell.appendChild(deleteBtn);
-        });
-        // If no schedules, show message
-        if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:#888;">No schedules found for the selected filters.</td></tr>';
-        }
-    };
-    // Initial population
-    populateScheduleStudentDropdown();
+
+
+
+
 
     // Helper to convert single year to range (e.g., 2026 -> 2025-2026)
     function toYearRange(year) {
@@ -2572,7 +3647,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filteredAccounts.length === 0) {
             const row = tableBody.insertRow();
             const cell = row.insertCell();
-            cell.colSpan = 7;
+            cell.colSpan = 8;
             cell.innerHTML = `
                 <div style="text-align: center; padding: 40px; color: #666;">
                     <div style="font-size: 1.2em; margin-bottom: 10px;">
@@ -2598,6 +3673,7 @@ document.addEventListener('DOMContentLoaded', () => {
         summaryRow.insertCell().textContent = '';
         summaryRow.insertCell().textContent = `₱${totalBalance.toFixed(2)}`;
         summaryRow.insertCell().textContent = `₱${totalRemaining.toFixed(2)}`;
+        summaryRow.insertCell().textContent = '';
         summaryRow.insertCell().textContent = '';
         summaryRow.insertCell().textContent = '';
         summaryRow.insertCell().textContent = `₱${totalPaid.toFixed(2)} paid`;
@@ -2650,6 +3726,15 @@ document.addEventListener('DOMContentLoaded', () => {
             semCell.textContent = account.semester || 'N/A';
             semCell.style.color = '#6c757d';
             
+            // Schedule
+            const scheduleCell = row.insertCell();
+            const viewScheduleBtn = document.createElement('button');
+            viewScheduleBtn.textContent = '📅 View Schedule';
+            viewScheduleBtn.classList.add('btn', 'btn-sm', 'btn-info');
+            viewScheduleBtn.title = 'View student schedule';
+            viewScheduleBtn.onclick = () => viewStudentSchedule(account.studentId, studentName);
+            scheduleCell.appendChild(viewScheduleBtn);
+            
             // Actions
             const actionsCell = row.insertCell();
             actionsCell.style.whiteSpace = 'nowrap';
@@ -2677,10 +3762,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 addPaymentBtn.classList.add('btn-secondary');
             }
             
-            actionsCell.appendChild(viewBtn);
-            actionsCell.appendChild(addPaymentBtn);
-        });
+                    actionsCell.appendChild(viewBtn);
+        actionsCell.appendChild(addPaymentBtn);
+    });
+}
+
+// Function to view a specific student's schedule
+async function viewStudentSchedule(studentId, studentName) {
+    try {
+        // Switch to Manage Schedules section
+        const manageSchedulesLink = document.querySelector('a[data-target="manageSchedules"]');
+        if (manageSchedulesLink) {
+            manageSchedulesLink.click();
+        }
+        
+        // Wait for the section to load
+        setTimeout(async () => {
+            // Set the student in the state
+            updateManageSchedulesState({
+                selectedStudent: studentId,
+                currentStep: 5
+            });
+            
+            // Load the student's schedules
+            const schedules = await loadSchedulesForStudent(studentId);
+            updateManageSchedulesState({ schedules });
+            renderSchedulesTable(schedules);
+            
+            // Show success message
+            window.showNotification(`Loaded schedule for ${studentName}`, 'success');
+        }, 100);
+    } catch (error) {
+        window.showNotification(`Failed to load schedule: ${error.message}`, 'error');
     }
+}
     
     function openAccountStatementModal(account, studentName) {
         const modal = document.getElementById('accountStatementModal');
@@ -2947,5 +4062,725 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification(e.message, 'error');
         }
     }
+
+    // --- Bulk Assign Schedule by Section ---
+    const openBulkScheduleModalBtn = document.getElementById('openBulkScheduleModal');
+    const bulkScheduleModal = document.getElementById('bulkScheduleModal');
+    const closeBulkScheduleModalBtn = document.getElementById('closeBulkScheduleModal');
+    const bulkSectionSelect = document.getElementById('bulkSectionSelect');
+    const bulkSubjectSelect = document.getElementById('bulkSubjectSelect');
+    const bulkDescriptionModal = document.getElementById('bulkDescriptionModal');
+    const bulkUnitsModal = document.getElementById('bulkUnitsModal');
+    const bulkLecModal = document.getElementById('bulkLecModal');
+    const bulkLabModal = document.getElementById('bulkLabModal');
+    const bulkScheduleDay = document.getElementById('bulkScheduleDay');
+    const bulkScheduleStartTime = document.getElementById('bulkScheduleStartTime');
+    const bulkScheduleEndTime = document.getElementById('bulkScheduleEndTime');
+    const bulkScheduleRoom = document.getElementById('bulkScheduleRoom');
+    const bulkScheduleFaculty = document.getElementById('bulkScheduleFaculty');
+    const bulkScheduleAcademicYear = document.getElementById('bulkScheduleAcademicYear');
+    const bulkScheduleSemester = document.getElementById('bulkScheduleSemester');
+    const bulkScheduleForm = document.getElementById('bulkScheduleForm');
+    const bulkScheduleErrorMsg = document.getElementById('bulkScheduleErrorMsg');
+    const cancelBulkScheduleFormBtn = document.getElementById('cancelBulkScheduleForm');
+
+    // Open modal only if a course is selected
+    if (openBulkScheduleModalBtn) {
+        openBulkScheduleModalBtn.onclick = async () => {
+            const courseSelect = document.getElementById('scheduleCourseFilter');
+            if (!courseSelect || !courseSelect.value) {
+                window.showNotification('Please select a course first.', 'error');
+                return;
+            }
+            
+            // Fetch and populate sections for the selected course
+            bulkSectionSelect.innerHTML = '<option value="">-- All Sections --</option>';
+            try {
+                const sectionsResponse = await fetch(`/api/auth/sections?courseCode=${encodeURIComponent(courseSelect.value)}`);
+                if (sectionsResponse.ok) {
+                    const sections = await sectionsResponse.json();
+                    sections.forEach(section => {
+                        const option = document.createElement('option');
+                        option.value = section.id;
+                        option.textContent = `${section.name} (${section.id})`;
+                        bulkSectionSelect.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                window.showNotification('Failed to load sections for this course.', 'error');
+            }
+            
+            // Fetch and populate subjects for the selected course
+            bulkSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            try {
+                const response = await fetch(`/api/auth/subjects/by-course?courseCode=${encodeURIComponent(courseSelect.value)}`);
+                if (response.ok) {
+                    const subjects = await response.json();
+                    subjects.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject.code;
+                        option.textContent = `${subject.code} - ${subject.name}`;
+                        option.dataset.description = subject.description;
+                        option.dataset.units = subject.units;
+                        bulkSubjectSelect.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                window.showNotification('Failed to load subjects for this course.', 'error');
+            }
+            
+            // Clear autofill fields
+            bulkDescriptionModal.value = '';
+            bulkUnitsModal.value = '';
+            
+            // Populate faculty dropdown
+            await populateFacultyDropdown('bulkScheduleFaculty');
+            
+            // Populate academic year dropdown
+            const yearSelect = document.getElementById('bulkScheduleAcademicYear');
+            if (yearSelect) {
+                yearSelect.innerHTML = '<option value="">-- Select Academic Year --</option>';
+                const currentYear = new Date().getFullYear();
+                for (let i = -2; i <= 5; i++) {
+                    const start = currentYear + i;
+                    const end = start + 1;
+                    const value = `${start}-${end}`;
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = value;
+                    yearSelect.appendChild(option);
+                }
+            }
+            
+            // Populate semester dropdown
+            const semesterSelect = document.getElementById('bulkScheduleSemester');
+            if (semesterSelect) {
+                semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+                const semesters = ['First Semester', 'Second Semester', 'Summer'];
+                semesters.forEach(semester => {
+                    const option = document.createElement('option');
+                    option.value = semester;
+                    option.textContent = semester;
+                    semesterSelect.appendChild(option);
+                });
+            }
+            
+            // Show modal
+            bulkScheduleModal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // Set up auto-fill for subject selection
+            bulkSubjectSelect.onchange = async (e) => {
+                const code = e.target.value;
+                if (!code) {
+                    bulkDescriptionModal.value = '';
+                    bulkUnitsModal.value = '';
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/auth/subjects');
+                    if (response.ok) {
+                        const subjects = await response.json();
+                        const subj = subjects.find(s => s.code === code);
+                        if (subj) {
+                            bulkDescriptionModal.value = subj.name;
+                            bulkUnitsModal.value = subj.units;
+                            bulkLecModal.value = subj.lec || '';
+                            bulkLabModal.value = subj.lab || '';
+                        }
+                    }
+                    // Filter faculty by selected subject
+                    await populateFacultyDropdown('bulkScheduleFaculty', '', code);
+                } catch (e) {
+                    console.error('Failed to load subject details:', e);
+                }
+            };
+        };
+    }
+    if (closeBulkScheduleModalBtn) {
+        closeBulkScheduleModalBtn.onclick = () => {
+            bulkScheduleModal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+    }
+    if (cancelBulkScheduleFormBtn) {
+        cancelBulkScheduleFormBtn.onclick = () => {
+            bulkScheduleModal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+    }
+    if (bulkScheduleForm) {
+        bulkScheduleForm.onsubmit = async (e) => {
+            e.preventDefault();
+            bulkScheduleErrorMsg.textContent = '';
+            const courseSelect = document.getElementById('scheduleCourseFilter');
+            const courseCode = courseSelect ? courseSelect.value : '';
+            const sectionId = bulkSectionSelect.value;
+            const subjectOption = bulkSubjectSelect.options[bulkSubjectSelect.selectedIndex];
+            const subjectCode = subjectOption.value;
+            const description = bulkDescriptionModal.value;
+            const units = bulkUnitsModal.value;
+            const lec = bulkLecModal.value;
+            const lab = bulkLabModal.value;
+            const day = bulkScheduleDay.value;
+            const startTime = bulkScheduleStartTime.value;
+            const endTime = bulkScheduleEndTime.value;
+            const room = bulkScheduleRoom.value;
+            const faculty = bulkScheduleFaculty.value;
+            const academicYear = bulkScheduleAcademicYear.value;
+            const semester = bulkScheduleSemester.value;
+            if (!courseCode || !subjectCode || !description || !units || !lec || !lab || !day || !startTime || !endTime || !room || !faculty || !academicYear || !semester) {
+                bulkScheduleErrorMsg.textContent = 'Please fill in all required fields.';
+                return;
+            }
+            const scheduleDetails = {
+                subjectCode,
+                description,
+                units,
+                lec,
+                lab,
+                day,
+                startTime,
+                endTime,
+                room,
+                faculty,
+                academicYear,
+                semester
+            };
+            try {
+                let response;
+                if (sectionId) {
+                    // Assign to specific section
+                    response = await fetch('/api/auth/schedules/section-bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sectionId, scheduleDetails })
+                    });
+                } else {
+                    // Assign to all sections of the course
+                    response = await fetch('/api/auth/schedules/course-bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ courseCode, scheduleDetails })
+                    });
+                }
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+                bulkScheduleModal.style.display = 'none';
+                document.body.style.overflow = '';
+                
+                const successMessage = sectionId 
+                    ? 'Schedule assigned to the selected section successfully!' 
+                    : 'Schedule assigned to all sections of the course successfully!';
+                window.showNotification(successMessage, 'success');
+                
+                // Refresh the schedules table if it's currently displayed
+                const schedulesTable = document.getElementById('schedulesTable');
+                if (schedulesTable && schedulesTable.style.display !== 'none') {
+                    await loadSchedulesTable();
+                }
+            } catch (error) {
+                bulkScheduleErrorMsg.textContent = error.message;
+                window.showNotification('Failed to assign schedule: ' + error.message, 'error');
+            }
+        };
+    }
+    // Disable Assign Section Schedule button if no course is selected
+    const scheduleCourseFilter = document.getElementById('scheduleCourseFilter');
+    if (scheduleCourseFilter && openBulkScheduleModalBtn) {
+        scheduleCourseFilter.addEventListener('change', () => {
+            openBulkScheduleModalBtn.disabled = !scheduleCourseFilter.value;
+        });
+        openBulkScheduleModalBtn.disabled = !scheduleCourseFilter.value;
+    }
+
+    // --- Batch Grade Encoding Dropdown Filtering ---
+    function setupBatchGradeDropdowns() {
+        batchSectionSelect?.removeEventListener('change', updateBatchDropdownsForSection);
+        batchSectionSelect?.addEventListener('change', updateBatchDropdownsForSection);
+        batchSubjectSelect?.removeEventListener('change', loadBatchGradeTable);
+        batchSubjectSelect?.addEventListener('change', loadBatchGradeTable);
+        batchTermSelect?.removeEventListener('change', loadBatchGradeTable);
+        batchTermSelect?.addEventListener('change', loadBatchGradeTable);
+        // Populate on load
+        populateBatchSectionDropdown();
+        updateBatchDropdownsForSection();
+    }
+
+    // Call this only when batch grade encoding section is shown
+    if (window.location.hash.includes('Encode Grades') || document.getElementById('batchGradesTable')) {
+        setupBatchGradeDropdowns();
+    }
+
+    // --- Restore Manage Schedules Dropdowns ---
+    // Ensure schedule modal and table use the original populateSubjectDropdown
+    // (No changes needed if they already call populateSubjectDropdown directly)
+    // If you have navigation logic, ensure setupBatchGradeDropdowns is NOT called when switching to Manage Schedules
+
+    // --- Manage Schedules: Ensure year/semester dropdowns are always populated ---
+    function setupManageSchedulesDropdowns() {
+        const studentSelect = document.getElementById('scheduleStudentSelect');
+        const yearSelect = document.getElementById('scheduleAcademicYear');
+        const semSelect = document.getElementById('scheduleSemester');
+        if (!studentSelect || !yearSelect || !semSelect) return;
+        studentSelect.onchange = async () => {
+            await populateScheduleYearSemesterDropdowns(studentSelect.value);
+            yearSelect.value = '';
+            semSelect.value = '';
+            await loadSchedulesTable();
+        };
+        yearSelect.onchange = loadSchedulesTable;
+        semSelect.onchange = loadSchedulesTable;
+    }
+    // Call this when switching to Manage Schedules section
+    if (window.location.hash.includes('Manage Schedules') || document.getElementById('schedulesTable')) {
+        setupManageSchedulesDropdowns();
+        // If a student is already selected, populate dropdowns
+        const studentSelect = document.getElementById('scheduleStudentSelect');
+        if (studentSelect && studentSelect.value) {
+            populateScheduleYearSemesterDropdowns(studentSelect.value);
+        }
+    }
+    // After adding/editing/deleting a schedule, repopulate dropdowns
+    if (!window.origLoadSchedulesTable) {
+        window.origLoadSchedulesTable = loadSchedulesTable;
+        loadSchedulesTable = async function() {
+            await window.origLoadSchedulesTable.apply(this, arguments);
+            // Repopulate dropdowns after table changes
+            const studentSelect = document.getElementById('scheduleStudentSelect');
+            if (studentSelect && studentSelect.value) {
+                await populateScheduleYearSemesterDropdowns(studentSelect.value);
+            }
+        };
+    }
+
+    // --- Manage Schedules: Stepper UI Logic ---
+    function setupManageSchedulesStepper() {
+        const sectionSelect = document.getElementById('scheduleSectionSelect');
+        const studentSelect = document.getElementById('scheduleStudentSelect');
+        const yearSelect = document.getElementById('scheduleAcademicYear');
+        const semSelect = document.getElementById('scheduleSemester');
+        const bulkBtn = document.getElementById('openBulkScheduleModal');
+        const table = document.getElementById('schedulesTable');
+        const sectionMsg = document.getElementById('sectionStepMsg');
+        const studentMsg = document.getElementById('studentStepMsg');
+        const filterMsg = document.getElementById('filterStepMsg');
+        const actionsMsg = document.getElementById('actionsStepMsg');
+        const tableMsg = document.getElementById('tableStepMsg');
+
+        // Check if all required elements exist
+        if (!sectionSelect || !studentSelect || !yearSelect || !semSelect || !bulkBtn || !table || !sectionMsg || !studentMsg || !filterMsg || !actionsMsg || !tableMsg) {
+            console.log('Some Manage Schedules elements not found, skipping setup');
+            return;
+        }
+
+        // Initial state: only section enabled
+        sectionSelect.disabled = false;
+        studentSelect.disabled = true;
+        yearSelect.disabled = true;
+        semSelect.disabled = true;
+        bulkBtn.disabled = true;
+        sectionMsg.style.display = '';
+        studentMsg.style.display = '';
+        filterMsg.style.display = '';
+        actionsMsg.style.display = '';
+        tableMsg.style.display = '';
+        table.style.opacity = 0.5;
+
+        // Helper: Reset all steps after section
+        function resetAfterSection() {
+            studentSelect.value = '';
+            yearSelect.value = '';
+            semSelect.value = '';
+            studentSelect.disabled = true;
+            yearSelect.disabled = true;
+            semSelect.disabled = true;
+            bulkBtn.disabled = true;
+            studentMsg.style.display = '';
+            filterMsg.style.display = '';
+            actionsMsg.style.display = '';
+            tableMsg.style.display = '';
+            table.style.opacity = 0.5;
+        }
+        // Helper: Reset after student
+        function resetAfterStudent() {
+            yearSelect.value = '';
+            semSelect.value = '';
+            yearSelect.disabled = true;
+            semSelect.disabled = true;
+            bulkBtn.disabled = true;
+            filterMsg.style.display = '';
+            actionsMsg.style.display = '';
+            tableMsg.style.display = '';
+            table.style.opacity = 0.5;
+        }
+
+        // Step 1: Section select
+        sectionSelect.onchange = async () => {
+            if (!sectionSelect.value) {
+                resetAfterSection();
+                sectionMsg.textContent = 'Please select a section to begin.';
+                return;
+            }
+            // Populate students for section
+            await populateScheduleStudentDropdown(sectionSelect.value);
+            studentSelect.disabled = false;
+            studentMsg.textContent = 'Please select a student to view or manage schedules.';
+            resetAfterStudent();
+        };
+
+        // Step 2: Student select
+        studentSelect.onchange = async () => {
+            if (!studentSelect.value) {
+                resetAfterStudent();
+                studentMsg.textContent = 'Please select a student to view or manage schedules.';
+                return;
+            }
+            // Populate year/semester for student
+            await populateScheduleYearSemesterDropdowns(studentSelect.value);
+            yearSelect.disabled = false;
+            semSelect.disabled = false;
+            bulkBtn.disabled = false;
+            studentMsg.style.display = 'none';
+            filterMsg.textContent = '';
+            actionsMsg.textContent = '';
+            tableMsg.style.display = 'none';
+            table.style.opacity = 1;
+            // Load table
+            await loadSchedulesTable();
+        };
+
+        // Step 3: Year/Semester filter
+        yearSelect.onchange = loadSchedulesTable;
+        semSelect.onchange = loadSchedulesTable;
+
+        // Step 4: Actions (handled by enabling/disabling above)
+
+        // Step 5: Table (handled by loadSchedulesTable)
+    }
+
+    // Call this when switching to Manage Schedules section
+    if (window.location.hash.includes('Manage Schedules') || document.getElementById('schedulesTable')) {
+        setupManageSchedulesStepper();
+    }
+
+    // Ensure section dropdown is populated when Manage Schedules is shown
+    if (window.location.hash.includes('Manage Schedules') || document.getElementById('schedulesTable')) {
+        populateScheduleSectionDropdown();
+        setupManageSchedulesStepper();
+    }
+
+    // Ensure released grades modal exists in DOM
+    if (!document.getElementById('releasedGradesModal')) {
+        const modal = document.createElement('div');
+        modal.id = 'releasedGradesModal';
+        modal.style.display = 'none';
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100vw';
+        modal.style.height = '100vh';
+        modal.style.background = 'rgba(0,0,0,0.4)';
+        modal.style.zIndex = '9999';
+        modal.innerHTML = `
+            <div style="background:#fff;max-width:600px;margin:60px auto;padding:24px 24px 12px 24px;border-radius:8px;position:relative;">
+                <h3 style="margin-top:0;">Released Grades</h3>
+                <div id="releasedGradesModalContent"></div>
+                <button id="closeReleasedGradesModal" style="margin-top:16px;float:right;padding:6px 18px;">Close</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById('closeReleasedGradesModal').onclick = () => {
+            modal.style.display = 'none';
+        };
+    }
+
+    // --- Manage Schedules: New Stepper UI Logic ---
+    // This function is now moved to global scope below
+
+
+
+    // Patch section dropdown population to filter by course
+    // This function is now moved to global scope below
+
+
 });
 
+// Ensure this function exists and is robust
+async function populateCourseDropdown(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Select Course --</option>';
+    try {
+        const response = await fetch('/api/auth/courses');
+        if (response.ok) {
+            const courses = await response.json();
+            if (courses.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No courses found';
+                select.appendChild(option);
+            } else {
+                courses.forEach(course => {
+                    const option = document.createElement('option');
+                    option.value = course.code;
+                    option.textContent = course.name;
+                    select.appendChild(option);
+                });
+            }
+        } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Error loading courses';
+            select.appendChild(option);
+        }
+    } catch (error) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Error loading courses';
+        select.appendChild(option);
+        console.error('Error loading courses:', error);
+    }
+}
+
+// At the start of loadEncodeGradesData, call populateCourseDropdown
+// (already present, but ensure it is the first thing called)
+
+function calculateGPA(grades, allSubjects) {
+    let totalGpa = 0, totalUnits = 0;
+    const rows = grades.map(g => {
+        let subject = allSubjects.find(s => s.code === g.subjectCode) || {};
+        const units = (g.units && g.units !== 'N/A') ? Number(g.units) : (subject.units || 0);
+        let gpa = '';
+        if (units && g.numericGrade !== null && g.numericGrade !== undefined && !isNaN(units) && !isNaN(Number(g.numericGrade))) {
+            gpa = (units * Number(g.numericGrade)).toFixed(2);
+            totalGpa += units * Number(g.numericGrade);
+            totalUnits += units;
+        }
+        return { ...g, units, gpa };
+    });
+    const overallGpa = (totalUnits > 0) ? (totalGpa / totalUnits).toFixed(2) : '';
+    return { rows, overallGpa };
+}
+
+// Global function for populating schedule section dropdown
+window.populateScheduleSectionDropdown = async function() {
+    const sectionSelect = document.getElementById('scheduleSectionSelect');
+    const courseFilter = document.getElementById('scheduleCourseFilter');
+    if (!sectionSelect) return;
+    try {
+        const response = await fetch('/api/auth/sections');
+        if (response.ok) {
+            const sections = await response.json();
+            sectionSelect.innerHTML = '<option value="">All Sections</option>';
+            const selectedCourse = courseFilter ? courseFilter.value : '';
+            sections.forEach(section => {
+                if (!selectedCourse || section.courseCode === selectedCourse) {
+                    const option = document.createElement('option');
+                    option.value = section.id;
+                    option.textContent = section.name + ' (' + section.id + ')';
+                    sectionSelect.appendChild(option);
+                }
+            });
+        }
+    } catch (e) {
+        sectionSelect.innerHTML = '<option value="">Error loading sections</option>';
+    }
+};
+
+// --- Manage Schedules: New Stepper UI Logic (Global Scope) ---
+function setupManageSchedulesNewStepper() {
+    const courseFilter = document.getElementById('scheduleCourseFilter');
+    const actionsCard = document.getElementById('step1-actions');
+    const sectionCard = document.getElementById('step2-section');
+    const studentCard = document.getElementById('step3-student');
+    const filterCard = document.getElementById('step4-filter');
+    const tableCard = document.getElementById('step5-table');
+    const bulkBtn = document.getElementById('openBulkScheduleModal');
+    const sectionSelect = document.getElementById('scheduleSectionSelect');
+
+    if (!courseFilter || !actionsCard || !sectionCard || !studentCard || !filterCard || !tableCard || !bulkBtn) {
+        console.log('Some Manage Schedules elements not found, skipping setup');
+        return;
+    }
+
+    // Hide all steps except course filter and actions
+    sectionCard.style.display = 'none';
+    studentCard.style.display = 'none';
+    filterCard.style.display = 'none';
+    tableCard.style.display = 'none';
+    bulkBtn.disabled = false;
+
+    // Populate course filter
+    populateCourseDropdown('scheduleCourseFilter');
+    courseFilter.onchange = async function() {
+        await window.populateScheduleSectionDropdown();
+    };
+
+    // Bulk button: show modal immediately, do not reveal other steps
+    bulkBtn.onclick = async function(e) {
+        e.preventDefault();
+        sectionCard.style.display = 'none';
+        studentCard.style.display = 'none';
+        filterCard.style.display = 'none';
+        tableCard.style.display = 'none';
+        bulkBtn.disabled = false;
+        // Show bulk modal (existing logic)
+        if (typeof openBulkScheduleModalBtn !== 'undefined' && openBulkScheduleModalBtn.onclick) {
+            openBulkScheduleModalBtn.onclick();
+        } else {
+            // fallback: show modal directly
+            const modal = document.getElementById('bulkScheduleModal');
+            if (modal) {
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    };
+
+
+
+    // When switching away, reset steps and re-enable buttons
+    window.resetManageSchedulesStepper = function() {
+        sectionCard.style.display = 'none';
+        studentCard.style.display = 'none';
+        filterCard.style.display = 'none';
+        tableCard.style.display = 'none';
+        bulkBtn.disabled = false;
+    };
+}
+
+// --- Ensure Manage Schedules stepper is always initialized ---
+function ensureManageSchedulesStepperInit() {
+    // Listen for hashchange (tab switch)
+    window.addEventListener('hashchange', () => {
+        if (window.location.hash.includes('Manage Schedules') || document.getElementById('schedulesTable')) {
+            setupManageSchedulesNewStepper();
+        }
+    });
+    // Also run on DOMContentLoaded and after navigation
+    if (window.location.hash.includes('Manage Schedules') || document.getElementById('schedulesTable')) {
+        setupManageSchedulesNewStepper();
+    }
+}
+
+// Call this at the end of the file
+ensureManageSchedulesStepperInit();
+
+// In the Add/Edit Section modal logic, update the onOpen function:
+// - Get the selected course from the main page filter (sectionCourseFilter)
+// - Populate the Course Code dropdown with only that course
+// - Set the value and make it read-only/disabled
+// - For edit, also pre-fill with the section's course
+
+// Update the onOpen function for setupModal('sectionModal', ...)
+const mainSectionCourseFilter = document.getElementById('sectionCourseFilter');
+
+function getMainSectionSelectedCourse() {
+    return mainSectionCourseFilter ? mainSectionCourseFilter.value : '';
+}
+
+// Patch the onOpen function for Add Section
+const origSectionModalOnOpen = async () => {
+    document.getElementById('sectionModalTitle').textContent = "Add New Section";
+    document.getElementById('sectionForm').reset();
+    document.getElementById('sectionEditCode').value = '';
+    document.getElementById('sectionCodeModal').readOnly = false;
+    // Only show the selected course in the Course Code dropdown
+    const courseCodeSelect = document.getElementById('sectionCourseCodeModal');
+    const selectedCourse = getMainSectionSelectedCourse();
+    courseCodeSelect.innerHTML = '<option value="">-- Select Course --</option>';
+    if (selectedCourse) {
+        const option = document.createElement('option');
+        option.value = selectedCourse;
+        option.textContent = selectedCourse;
+        courseCodeSelect.appendChild(option);
+        courseCodeSelect.value = selectedCourse;
+        courseCodeSelect.disabled = true;
+    } else {
+        courseCodeSelect.disabled = false;
+    }
+    document.getElementById('sectionCourseCodeModal').onchange = generateSectionNameAndId;
+    document.getElementById('sectionYearLevelModal').onchange = generateSectionNameAndId;
+    document.getElementById('sectionLetterModal').onchange = generateSectionNameAndId;
+};
+
+// Patch the onOpen function for Edit Section
+async function openEditSectionModal(section) {
+    document.getElementById('sectionModalTitle').textContent = "Edit Section";
+    const form = document.getElementById('sectionForm');
+    form.reset();
+    form.sectionEditCode.value = section.id;
+    form.sectionCodeModal.value = section.id;
+    document.getElementById('sectionCodeModal').readOnly = true;
+    form.sectionNameModal.value = section.name;
+    // Only show the section's course in the Course Code dropdown
+    const courseCodeSelect = document.getElementById('sectionCourseCodeModal');
+    courseCodeSelect.innerHTML = '';
+    const option = document.createElement('option');
+    option.value = section.courseCode;
+    option.textContent = section.courseCode;
+    courseCodeSelect.appendChild(option);
+    courseCodeSelect.value = section.courseCode;
+    courseCodeSelect.disabled = true;
+    form.sectionYearLevelModal.value = section.yearLevel || '';
+    form.sectionLetterModal.value = section.sectionLetter || '';
+    form.sectionMaxCapacityModal.value = section.maxCapacity || 30;
+    form.sectionCurrentEnrollmentModal.value = section.currentEnrollment || 0;
+    document.getElementById('sectionModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Setup schedule modal with new CRUD operations
+setupModal('scheduleModal', null, 'closeScheduleModal', 'scheduleForm',
+    async (form) => {
+        const formData = new FormData(form);
+        const scheduleData = {
+            studentId: manageSchedulesState.selectedStudent,
+            subjectCode: formData.get('scheduleSubjectCodeModal'),
+            description: formData.get('scheduleDescriptionModal'),
+            units: parseInt(formData.get('scheduleUnitsModal')),
+            lec: parseInt(formData.get('scheduleLecModal')),
+            lab: parseInt(formData.get('scheduleLabModal')),
+            day: formData.get('scheduleDayModal'),
+            startTime: formData.get('scheduleStartTimeModal'),
+            endTime: formData.get('scheduleEndTimeModal'),
+            room: formData.get('scheduleRoomModal'),
+            faculty: formData.get('scheduleFacultyModal'),
+            academicYear: formData.get('scheduleAcademicYearModal'),
+            semester: formData.get('scheduleSemesterModal')
+        };
+        
+        const scheduleId = formData.get('scheduleEditId');
+        if (scheduleId) {
+            return await updateSchedule(scheduleId, scheduleData);
+        } else {
+            return await createSchedule(scheduleData);
+        }
+    },
+    async (form) => {
+        // Reset form for new schedule
+        form.reset();
+        form.scheduleEditId.value = '';
+        document.getElementById('scheduleModalTitle').textContent = 'Add Schedule Item';
+        
+        // Pre-populate with current student if available
+        if (manageSchedulesState.selectedStudent) {
+            // Populate dropdowns for the current student's context
+            await populateScheduleDropdownsForStudent(manageSchedulesState.selectedStudent);
+        }
+    },
+    'cancelScheduleForm');
+
+// Setup section modal (restore the original)
+setupModal('sectionModal', 'openAddSectionModal', 'closeSectionModal', 'sectionForm',
+    async (form) => { /* ...existing submit logic... */ },
+    origSectionModalOnOpen, 'cancelSectionForm');
+
+// ============================================================================
+// MANAGE SCHEDULES SECTION - COMPREHENSIVE IMPLEMENTATION
+// ============================================================================

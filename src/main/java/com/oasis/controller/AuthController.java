@@ -1,8 +1,13 @@
 package com.oasis.controller;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,8 +20,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.oasis.model.AuthRequest;
 import com.oasis.model.AuthResponse;
+import com.oasis.model.BulkSectionScheduleRequest;
+import com.oasis.model.BulkCourseScheduleRequest;
 import com.oasis.model.Course;
 import com.oasis.model.EnrollmentRequest;
 import com.oasis.model.Faculty;
@@ -25,18 +34,23 @@ import com.oasis.model.ProcessEnrollmentRequest;
 import com.oasis.model.ScheduleItem;
 import com.oasis.model.Section;
 import com.oasis.model.StudentAccount;
+import com.oasis.model.StudentGrade;
 import com.oasis.model.Subject;
 import com.oasis.model.User;
 import com.oasis.service.AuthService;
+import com.oasis.service.GradeService;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
     private final AuthService authService;
+    private final GradeService gradeService;
 
-    public AuthController(AuthService authService) {
+    @Autowired
+    public AuthController(AuthService authService, GradeService gradeService) {
         this.authService = authService;
+        this.gradeService = gradeService;
     }
 
     @PostMapping("/login")
@@ -112,6 +126,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.getAllSubjects());
     }
 
+    @GetMapping("/subjects/by-course")
+    public ResponseEntity<List<Subject>> getSubjectsByCourse(@RequestParam String courseCode) {
+        return ResponseEntity.ok(authService.getSubjectsByCourse(courseCode));
+    }
+
     @GetMapping("/faculty")
     public ResponseEntity<List<Faculty>> getAllFaculty() {
         return ResponseEntity.ok(authService.getAllFaculty());
@@ -153,6 +172,18 @@ public class AuthController {
     public ResponseEntity<String> createBulkSchedules(@RequestBody List<ScheduleItem> scheduleItems) {
         authService.addBulkScheduleItems(scheduleItems);
         return ResponseEntity.status(HttpStatus.CREATED).body("Schedule items created successfully.");
+    }
+
+    @PostMapping("/schedules/section-bulk")
+    public ResponseEntity<String> createBulkSchedulesBySection(@RequestBody BulkSectionScheduleRequest request) {
+        int created = authService.addBulkScheduleItemsBySection(request.getSectionId(), request.getScheduleDetails());
+        return ResponseEntity.status(HttpStatus.CREATED).body("Created schedule for " + created + " students in section " + request.getSectionId());
+    }
+
+    @PostMapping("/schedules/course-bulk")
+    public ResponseEntity<String> createBulkSchedulesByCourse(@RequestBody BulkCourseScheduleRequest request) {
+        int created = authService.addBulkScheduleItemsByCourse(request.getCourseCode(), request.getScheduleDetails());
+        return ResponseEntity.status(HttpStatus.CREATED).body("Created schedule for " + created + " students in course " + request.getCourseCode());
     }
 
     @PostMapping("/subjects")
@@ -294,5 +325,137 @@ public class AuthController {
     public ResponseEntity<String> updateAllStudentCoursesToCode() {
         int updated = authService.batchUpdateStudentCoursesToCode();
         return ResponseEntity.ok("Updated " + updated + " students to use course codes.");
+    }
+
+    // Get all grades for a section/subject/term
+    @GetMapping("/grades/section")
+    public ResponseEntity<List<StudentGrade>> getGradesForSection(
+        @RequestParam String sectionId,
+        @RequestParam String subjectCode,
+        @RequestParam String academicYear,
+        @RequestParam String semester
+    ) {
+        List<StudentGrade> grades = gradeService.getGradesForSection(sectionId, subjectCode, academicYear, semester);
+        return ResponseEntity.ok(grades);
+    }
+
+    // Batch encode grades for a section/subject/term
+    @PostMapping("/grades/batch-encode")
+    public ResponseEntity<String> batchEncodeGrades(@RequestBody Map<String, Object> payload) {
+        System.out.println("Payload: " + payload);
+        String sectionId = (String) payload.get("sectionId");
+        String subjectCode = (String) payload.get("subjectCode");
+        String academicYear = (String) payload.get("academicYear");
+        String semester = (String) payload.get("semester");
+        Object gradesObj = payload.get("grades");
+        System.out.println("Grades object: " + gradesObj);
+        List<Map<String, Object>> grades;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            String json = mapper.writeValueAsString(gradesObj);
+            grades = mapper.readValue(json, new TypeReference<List<Map<String, Object>>>(){});
+        } catch (Exception e) {
+            System.out.println("Error parsing grades: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error parsing grades payload: " + e.getMessage());
+        }
+        int saved = gradeService.batchEncodeGrades(sectionId, subjectCode, academicYear, semester, grades);
+        return ResponseEntity.ok("Saved " + saved + " grades.");
+    }
+
+    // Batch release all grades for a section/subject/term
+    @PostMapping("/grades/release-all")
+    public ResponseEntity<String> releaseAllGrades(@RequestBody Map<String, String> params) {
+        String sectionId = params.get("sectionId");
+        String subjectCode = params.get("subjectCode");
+        String academicYear = params.get("academicYear");
+        String semester = params.get("semester");
+        int released = gradeService.releaseAllGrades(sectionId, subjectCode, academicYear, semester);
+        return ResponseEntity.ok("Released " + released + " grades.");
+    }
+
+    // Batch unrelease all grades for a section/subject/term
+    @PostMapping("/grades/unrelease-all")
+    public ResponseEntity<String> unreleaseAllGrades(@RequestBody Map<String, String> params) {
+        String sectionId = params.get("sectionId");
+        String subjectCode = params.get("subjectCode");
+        String academicYear = params.get("academicYear");
+        String semester = params.get("semester");
+        int unreleased = gradeService.unreleaseAllGrades(sectionId, subjectCode, academicYear, semester);
+        return ResponseEntity.ok("Unreleased " + unreleased + " grades.");
+    }
+
+    // Get grade statistics for a section/subject/term
+    @GetMapping("/grades/statistics")
+    public ResponseEntity<Map<String, Object>> getGradeStatistics(
+        @RequestParam String sectionId,
+        @RequestParam String subjectCode,
+        @RequestParam String academicYear,
+        @RequestParam String semester
+    ) {
+        Map<String, Object> stats = gradeService.getGradeStatistics(sectionId, subjectCode, academicYear, semester);
+        return ResponseEntity.ok(stats);
+    }
+
+    // Validate grade input
+    @PostMapping("/grades/validate")
+    public ResponseEntity<Map<String, Object>> validateGrade(@RequestBody Map<String, String> request) {
+        String grade = request.get("grade");
+        boolean isValid = gradeService.isValidGrade(grade);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("isValid", isValid);
+        
+        if (isValid && grade != null) {
+            // Try to convert and provide feedback
+            try {
+                double numericGrade = Double.parseDouble(grade);
+                if (numericGrade >= 1.0 && numericGrade <= 5.0) {
+                    String letterGrade = gradeService.convertNumericToLetter(numericGrade);
+                    response.put("letterGrade", letterGrade);
+                    response.put("numericGrade", numericGrade);
+                } else if (numericGrade >= 0 && numericGrade <= 100) {
+                    // Convert percentage to 5.0 scale
+                    double convertedGrade = 5.0 - (numericGrade / 20.0);
+                    String letterGrade = gradeService.convertNumericToLetter(convertedGrade);
+                    response.put("letterGrade", letterGrade);
+                    response.put("numericGrade", convertedGrade);
+                    response.put("originalPercentage", numericGrade);
+                }
+            } catch (NumberFormatException e) {
+                // It's a letter grade
+                Double numericGrade = gradeService.convertLetterToNumeric(grade);
+                response.put("letterGrade", grade.toUpperCase());
+                response.put("numericGrade", numericGrade);
+            }
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+
+    // Get all unique subjects and terms for a section (for dropdown filtering)
+    @GetMapping("/grades/section/subjects-terms")
+    public ResponseEntity<Map<String, Object>> getSubjectsAndTermsForSection(@RequestParam String sectionId) {
+        List<StudentGrade> grades = gradeService.getAllGradesForSection(sectionId);
+        Set<Map<String, Object>> subjects = new HashSet<>();
+        Set<String> terms = new HashSet<>();
+        for (StudentGrade g : grades) {
+            Map<String, Object> subj = new HashMap<>();
+            subj.put("code", g.getSubjectCode());
+            subj.put("name", g.getSubjectName());
+            subjects.add(subj);
+            terms.add(g.getAcademicYear() + "||" + g.getSemester());
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put("subjects", subjects);
+        result.put("terms", terms);
+        return ResponseEntity.ok(result);
+    }
+
+    // Get all schedules for a section
+    @GetMapping("/schedules/section/{sectionId}")
+    public ResponseEntity<List<ScheduleItem>> getSchedulesForSection(@PathVariable String sectionId) {
+        List<ScheduleItem> schedules = authService.getSchedulesForSection(sectionId);
+        return ResponseEntity.ok(schedules);
     }
 }
